@@ -347,6 +347,11 @@
     "video": {
       "load_video": "Load video: {{ description }}"
     },
+    "shop_the_look": {
+      "view_product": "View {{ product }}",
+      "products_label": "Products in this look",
+      "placeholder_title": "Example product"
+    },
     "slideshow": {
       "load_slide": "Load slide",
       "previous_slideshow": "Previous slide",
