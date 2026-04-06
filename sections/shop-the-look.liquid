@@ -2,6 +2,13 @@
 {{ 'section-shop-the-look.css' | asset_url | stylesheet_tag }}
 <script src="{{ 'shop-the-look.js' | asset_url }}" defer="defer"></script>
 
+{%- liquid
+  assign fetch_priority = 'auto'
+  if section.index == 1
+    assign fetch_priority = 'high'
+  endif
+-%}
+
 {%- style -%}
   {%- assign dot_color_rgb = section.settings.dot_color | color_to_rgb | remove: 'rgb(' | remove: ')' -%}
   .section-{{ section.id }} {
@@ -30,23 +37,37 @@
         </h2>
       {%- endif -%}
 
-      <div class="shop-the-look__grid">
+      <div class="shop-the-look__grid shop-the-look__grid--{{ section.settings.desktop_image_width }}">
         <div class="shop-the-look__image-container">
-          {%- if section.settings.image != blank -%}
-            {%- assign widths = '375, 550, 750, 1100, 1500' -%}
-            {%- capture sizes -%}
-              (min-width: {{ settings.page_width }}px) {{ settings.page_width | minus: 100 | times: 0.58 | round: 0 }}px,
-              (min-width: 750px) calc((100vw - 13rem) * 0.58),
-              100vw
-            {%- endcapture -%}
-            {{
-              section.settings.image
-              | image_url: width: 1500
-              | image_tag: sizes: sizes, widths: widths, class: 'shop-the-look__image'
-            }}
-          {%- else -%}
-            {{ 'lifestyle-2' | placeholder_svg_tag: 'placeholder-svg shop-the-look__image' }}
-          {%- endif -%}
+          <div
+            class="shop-the-look__media shop-the-look__media--{{ section.settings.height }} global-media-settings{% if section.settings.image != blank %} media{% else %} placeholder shop-the-look__media--placeholder{% endif %}{% if section.settings.image_behavior != 'none' %} animate--{{ section.settings.image_behavior }}{% endif %}"
+            {% if section.settings.height == 'adapt' and section.settings.image != blank %}
+              style="padding-bottom: {{ 1 | divided_by: section.settings.image.aspect_ratio | times: 100 }}%;"
+            {% endif %}
+          >
+            {%- if section.settings.image != blank -%}
+              {%- if section.settings.image_behavior == 'ambient' or section.settings.image_behavior == 'zoom-in' -%}
+                {%- assign widths = '198, 432, 642, 900, 1284, 1800' -%}
+                {%- capture sizes -%}
+                  (min-width: {{ settings.page_width }}px) {{ settings.page_width | minus: 100 | times: 0.58 | round: 0 }}px,
+                  (min-width: 750px) calc((100vw - 13rem) * 0.58), calc(100vw - 3rem)
+                {%- endcapture -%}
+              {%- else -%}
+                {%- assign widths = '165, 360, 535, 750, 1070, 1500' -%}
+                {%- capture sizes -%}
+                  (min-width: {{ settings.page_width }}px) {{ settings.page_width | minus: 100 | times: 0.58 | round: 0 }}px,
+                  (min-width: 750px) calc((100vw - 13rem) * 0.58), calc(100vw - 3rem)
+                {%- endcapture -%}
+              {%- endif -%}
+              {{
+                section.settings.image
+                | image_url: width: 1500
+                | image_tag: sizes: sizes, widths: widths, fetchpriority: fetch_priority, class: 'shop-the-look__image'
+              }}
+            {%- else -%}
+              {{ 'lifestyle-2' | placeholder_svg_tag: 'placeholder-svg shop-the-look__image' }}
+            {%- endif -%}
+          </div>
 
           {%- for block in section.blocks -%}
             {%- assign product = block.settings.product -%}
@@ -82,7 +103,7 @@
                       }}
                     </div>
                     <div class="shop-the-look__product-info">
-                      {%- if product.collections.first -%}
+                      {%- if section.settings.show_collection and product.collections.first -%}
                         <span class="shop-the-look__product-collection caption">
                           {{ product.collections.first.title }}
                         </span>
@@ -90,7 +111,9 @@
                       <span class="shop-the-look__product-title">
                         {{ product.title }}
                       </span>
-                      {% render 'price', product: product %}
+                      {%- if section.settings.show_price -%}
+                        {% render 'price', product: product %}
+                      {%- endif -%}
                     </div>
                   </a>
                 {%- else -%}
@@ -129,6 +152,40 @@
       "label": "Look image"
     },
     {
+      "type": "select",
+      "id": "desktop_image_width",
+      "options": [
+        { "value": "small", "label": "Small" },
+        { "value": "medium", "label": "Medium" },
+        { "value": "large", "label": "Large" }
+      ],
+      "default": "medium",
+      "label": "Desktop image width"
+    },
+    {
+      "type": "select",
+      "id": "height",
+      "options": [
+        { "value": "adapt", "label": "Adapt to image" },
+        { "value": "small", "label": "Small" },
+        { "value": "medium", "label": "Medium" },
+        { "value": "large", "label": "Large" }
+      ],
+      "default": "adapt",
+      "label": "Image height"
+    },
+    {
+      "type": "select",
+      "id": "image_behavior",
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "ambient", "label": "Ambient movement" },
+        { "value": "zoom-in", "label": "Zoom in" }
+      ],
+      "default": "none",
+      "label": "Image behavior"
+    },
+    {
       "type": "inline_richtext",
       "id": "heading",
       "default": "Shop the look",
@@ -150,6 +207,18 @@
       "id": "dot_color",
       "label": "Dot color",
       "default": "#808080"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_collection",
+      "label": "Show collection",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_price",
+      "label": "Show price",
+      "default": true
     },
     {
       "type": "color_scheme",
