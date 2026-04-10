@@ -1,5 +1,6 @@
 {{ 'component-price.css' | asset_url | stylesheet_tag }}
 {{ 'section-shop-the-look.css' | asset_url | stylesheet_tag }}
+{{ 'component-slider.css' | asset_url | stylesheet_tag }}
 <script src="{{ 'shop-the-look.js' | asset_url }}" defer="defer"></script>
 
 {%- liquid
@@ -12,6 +13,7 @@
 {%- style -%}
   {%- assign dot_color_rgb = section.settings.dot_color | color_to_rgb | remove: 'rgb(' | remove: ')' -%}
   .section-{{ section.id }} {
+    overflow: hidden;
     --dot-color: {{ dot_color_rgb }};
   }
 
@@ -85,11 +87,17 @@
         </div>
 
         <div class="shop-the-look__products">
-          <ul class="shop-the-look__product-list" role="list" aria-label="{{ 'sections.shop_the_look.products_label' | t | default: 'Products in this look' }}">
+          <ul
+            class="shop-the-look__product-list"
+            id="ShopTheLookSlider-{{ section.id }}"
+            role="list"
+            aria-label="{{ 'sections.shop_the_look.products_label' | t | default: 'Products in this look' }}"
+          >
             {%- for block in section.blocks -%}
               {%- assign product = block.settings.product -%}
               <li
                 class="shop-the-look__product-card"
+                id="ShopTheLookSlide-{{ section.id }}-{{ forloop.index }}"
                 data-block-index="{{ forloop.index0 }}"
                 {{ block.shopify_attributes }}
               >
@@ -131,6 +139,39 @@
               </li>
             {%- endfor -%}
           </ul>
+          {%- if section.blocks.size > 1 -%}
+            <div class="shop-the-look__slider-buttons slider-buttons">
+              <button
+                type="button"
+                class="slider-button slider-button--prev"
+                name="previous"
+                aria-label="{{ 'general.slider.previous_slide' | t }}"
+                aria-controls="ShopTheLookSlider-{{ section.id }}"
+                disabled
+              >
+                <span class="svg-wrapper">
+                  {{- 'icon-caret.svg' | inline_asset_content -}}
+                </span>
+              </button>
+              <div class="slider-counter caption">
+                <span class="slider-counter--current">1</span>
+                <span aria-hidden="true"> / </span>
+                <span class="visually-hidden">{{ 'general.slider.of' | t }}</span>
+                <span class="slider-counter--total">{{ section.blocks.size }}</span>
+              </div>
+              <button
+                type="button"
+                class="slider-button slider-button--next"
+                name="next"
+                aria-label="{{ 'general.slider.next_slide' | t }}"
+                aria-controls="ShopTheLookSlider-{{ section.id }}"
+              >
+                <span class="svg-wrapper">
+                  {{- 'icon-caret.svg' | inline_asset_content -}}
+                </span>
+              </button>
+            </div>
+          {%- endif -%}
         </div>
       </div>
     </shop-the-look>

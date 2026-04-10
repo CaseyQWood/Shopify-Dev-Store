@@ -10,11 +10,13 @@ shop-the-look {
 .shop-the-look__grid {
   display: grid;
   grid-template-columns: 1fr;
+  row-gap: 2rem;
 }
 
 @media screen and (min-width: 750px) {
   .shop-the-look__grid {
     align-items: start;
+    row-gap: 0;
   }
 
   .shop-the-look__grid--small {
@@ -186,22 +188,28 @@ shop-the-look .global-media-settings {
 
 /* Mobile: horizontal scroll */
 @media screen and (max-width: 749px) {
+  .shop-the-look__products {
+    margin: 0 -1.5rem;
+    overflow: hidden;
+  }
+
   .shop-the-look__product-list {
     display: flex;
     flex-direction: row;
-    gap: 1.5rem;
+    gap: 1rem;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     scroll-padding-left: 1.5rem;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: 0.5rem;
+    padding: 0 1.5rem 1rem;
   }
 
   .shop-the-look__product-card {
     scroll-snap-align: start;
     flex-shrink: 0;
-    width: 60vw;
-    max-width: 22rem;
+    width: 72vw;
+    max-width: 26rem;
+    min-width: 20rem;
   }
 }
 
@@ -251,6 +259,8 @@ shop-the-look .global-media-settings {
   padding: 1.2rem;
   text-decoration: none;
   color: inherit;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 /* Product image */
@@ -258,9 +268,16 @@ shop-the-look .global-media-settings {
   flex-shrink: 0;
   width: 8rem;
   height: 8rem;
-  border-radius: 0.4rem;
+  border-radius: var(--media-radius, 0.4rem);
   overflow: hidden;
   background: rgba(var(--color-foreground), 0.04);
+}
+
+@media screen and (max-width: 749px) {
+  .shop-the-look__product-image {
+    width: 9rem;
+    height: 9rem;
+  }
 }
 
 .shop-the-look__product-img {
@@ -304,6 +321,32 @@ shop-the-look .global-media-settings {
 
 .shop-the-look__product-info .price {
   font-size: 1.3rem;
+}
+
+/* Carousel buttons */
+.shop-the-look__slider-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+@media screen and (min-width: 750px) {
+  .shop-the-look__slider-buttons .slider-button--prev .icon {
+    transform: rotate(180deg);
+  }
+
+  .shop-the-look__slider-buttons .slider-button--next .icon {
+    transform: rotate(0deg);
+  }
+
+  .shop-the-look__slider-buttons .slider-button--prev:not([disabled]):hover .icon {
+    transform: rotate(180deg) scale(1.1);
+  }
+
+  .shop-the-look__slider-buttons .slider-button--next:not([disabled]):hover .icon {
+    transform: rotate(0deg) scale(1.1);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
