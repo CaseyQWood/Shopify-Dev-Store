@@ -134,9 +134,9 @@ shop-the-look .global-media-settings {
 }
 
 .shop-the-look__dot:focus-visible {
-  outline: 0.2rem solid rgba(var(--dot-color), 0.5);
-  outline-offset: 0.3rem;
-  box-shadow: 0 0 0 0.3rem rgb(var(--color-background)), 0 0 0.5rem 0.4rem rgba(var(--dot-color), 0.3);
+  outline: var(--focused-base-outline);
+  outline-offset: var(--focused-base-outline-offset);
+  box-shadow: var(--focused-base-box-shadow);
 }
 
 .shop-the-look__dot-inner {
@@ -238,13 +238,23 @@ shop-the-look .global-media-settings {
 
 /* Product card */
 .shop-the-look__product-card {
-  border-radius: var(--product-card-corner-radius, 0.8rem);
-  border: 0.1rem solid rgba(var(--color-foreground), 0.08);
+  --border-radius: var(--product-card-corner-radius);
+  --border-width: var(--product-card-border-width);
+  --border-opacity: var(--product-card-border-opacity);
+  --shadow-horizontal-offset: var(--product-card-shadow-horizontal-offset);
+  --shadow-vertical-offset: var(--product-card-shadow-vertical-offset);
+  --shadow-blur-radius: var(--product-card-shadow-blur-radius);
+  --shadow-opacity: var(--product-card-shadow-opacity);
+  --shadow-visible: var(--product-card-shadow-visible);
+  border-radius: var(--border-radius);
+  border: var(--border-width) solid rgba(var(--color-foreground), var(--border-opacity));
+  box-shadow: var(--shadow-horizontal-offset) var(--shadow-vertical-offset) var(--shadow-blur-radius)
+    rgba(var(--color-shadow), var(--shadow-opacity));
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .shop-the-look__product-card:hover {
-  border-color: rgba(var(--color-foreground), 0.15);
+  border-color: rgba(var(--color-foreground), calc(var(--border-opacity) + 0.07));
 }
 
 .shop-the-look__product-card--active {
@@ -268,7 +278,7 @@ shop-the-look .global-media-settings {
   flex-shrink: 0;
   width: 8rem;
   height: 8rem;
-  border-radius: var(--media-radius, 0.4rem);
+  border-radius: var(--media-radius);
   overflow: hidden;
   background: rgba(var(--color-foreground), 0.04);
 }
