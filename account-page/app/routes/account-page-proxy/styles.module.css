@@ -1,0 +1,176 @@
+.page {
+  --ap-color-fg: #121212;
+  --ap-color-fg-muted: #6b6b6b;
+  --ap-color-border: #e5e5e5;
+  --ap-color-bg: #ffffff;
+  --ap-color-bg-subtle: #f7f7f7;
+  --ap-color-accent: #121212;
+  --ap-color-danger: #a11a1a;
+  --ap-radius: 6px;
+  --ap-spacing-xs: 0.5rem;
+  --ap-spacing-sm: 1rem;
+  --ap-spacing-md: 1.5rem;
+  --ap-spacing-lg: 2.5rem;
+  --ap-page-max: 120rem;
+
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: var(--ap-color-fg);
+  background: var(--ap-color-bg);
+  max-width: var(--ap-page-max);
+  margin: 0 auto;
+  padding: var(--ap-spacing-lg) var(--ap-spacing-md);
+  font-size: 1.5rem;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.page *,
+.page *::before,
+.page *::after {
+  box-sizing: border-box;
+}
+
+.header {
+  border-bottom: 1px solid var(--ap-color-border);
+  padding-bottom: var(--ap-spacing-md);
+  margin-bottom: var(--ap-spacing-lg);
+}
+
+.title {
+  font-size: 3.2rem;
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  color: var(--ap-color-fg-muted);
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ap-spacing-lg);
+}
+
+@media (min-width: 990px) {
+  .layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+}
+
+.main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sidebar {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+@media (min-width: 990px) {
+  .sidebar {
+    width: 28rem;
+    position: sticky;
+    top: var(--ap-spacing-md);
+  }
+}
+
+.tabNav {
+  display: flex;
+  gap: var(--ap-spacing-xs);
+  border-bottom: 1px solid var(--ap-color-border);
+  margin-bottom: var(--ap-spacing-md);
+  overflow-x: auto;
+}
+
+.tabLink {
+  padding: var(--ap-spacing-sm) var(--ap-spacing-md);
+  color: var(--ap-color-fg-muted);
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.tabLink:hover {
+  color: var(--ap-color-fg);
+}
+
+.tabLink:focus-visible {
+  outline: 2px solid var(--ap-color-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.tabLinkActive {
+  color: var(--ap-color-fg);
+  border-bottom-color: var(--ap-color-accent);
+}
+
+.tabPanel {
+  padding-top: var(--ap-spacing-sm);
+}
+
+.summary {
+  background: var(--ap-color-bg-subtle);
+  border: 1px solid var(--ap-color-border);
+  border-radius: var(--ap-radius);
+  padding: var(--ap-spacing-md);
+}
+
+.summaryHeader {
+  font-size: 1.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ap-color-fg-muted);
+  margin: 0 0 var(--ap-spacing-sm);
+  font-weight: 600;
+}
+
+.summaryName {
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+
+.summaryField {
+  margin: 0 0 var(--ap-spacing-xs);
+  color: var(--ap-color-fg);
+  word-break: break-word;
+}
+
+.summaryDivider {
+  border: 0;
+  border-top: 1px solid var(--ap-color-border);
+  margin: var(--ap-spacing-md) 0;
+}
+
+.summaryAddressLabel {
+  font-size: 1.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ap-color-fg-muted);
+  margin: 0 0 var(--ap-spacing-xs);
+  font-weight: 600;
+}
+
+.summaryAddress {
+  margin: 0;
+  font-style: normal;
+  line-height: 1.6;
+}
+
+.loggedOut {
+  text-align: center;
+  padding: var(--ap-spacing-lg) var(--ap-spacing-md);
+  border: 1px solid var(--ap-color-border);
+  border-radius: var(--ap-radius);
+  color: var(--ap-color-fg-muted);
+}

@@ -1,0 +1,126 @@
+.heading {
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0 0 1.5rem;
+}
+
+.sectionTitle {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.section {
+  margin-bottom: 2.4rem;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
+  gap: 1.2rem 2rem;
+  border: 1px solid var(--ap-color-border);
+  border-radius: var(--ap-radius);
+  padding: 1.6rem;
+}
+
+.fieldLabel {
+  font-size: 1.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ap-color-fg-muted);
+  margin: 0 0 0.2rem;
+  font-weight: 600;
+}
+
+.fieldValue {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.addressList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1.2rem;
+  grid-template-columns: repeat(auto-fit, minmax(26rem, 1fr));
+}
+
+.addressCard {
+  border: 1px solid var(--ap-color-border);
+  border-radius: var(--ap-radius);
+  padding: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.addressBody {
+  margin: 0;
+  font-style: normal;
+  line-height: 1.6;
+  flex: 1;
+}
+
+.defaultTag {
+  display: inline-block;
+  padding: 0.2rem 0.8rem;
+  border-radius: 999px;
+  font-size: 1.1rem;
+  font-weight: 500;
+  background: #e0edff;
+  color: #1a4d8f;
+  align-self: flex-start;
+}
+
+.actions {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: auto;
+}
+
+.button {
+  appearance: none;
+  font: inherit;
+  background: #fff;
+  border: 1px solid var(--ap-color-accent);
+  color: var(--ap-color-accent);
+  padding: 0.6rem 1.2rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.3rem;
+  font-weight: 500;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--ap-color-accent);
+  color: #fff;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ap-color-accent);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.buttonDanger {
+  border-color: var(--ap-color-danger);
+  color: var(--ap-color-danger);
+}
+
+.buttonDanger:hover:not(:disabled) {
+  background: var(--ap-color-danger);
+  color: #fff;
+}

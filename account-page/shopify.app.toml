@@ -12,7 +12,7 @@ include_config_on_deploy = true
 [app_proxy]
 url = "/account-page-proxy"
 prefix = "apps"
-subpath = "my-custom-path"
+subpath = "account-page-proxy"
 
 [webhooks]
 api_version = "2026-07"
