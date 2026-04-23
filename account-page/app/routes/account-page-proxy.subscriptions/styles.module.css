@@ -1,0 +1,80 @@
+.heading {
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0 0 1.5rem;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1.2rem;
+}
+
+.card {
+  border: 1px solid var(--ap-color-border);
+  border-radius: var(--ap-radius);
+  padding: 1.6rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.8rem 1.6rem;
+  align-items: start;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cardTitle {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.cardMeta {
+  color: var(--ap-color-fg-muted);
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.cardPrice {
+  font-size: 1.6rem;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+.badgeActive {
+  background: #e6f4ea;
+  color: #1e6b3a;
+}
+
+.badgePaused {
+  background: #fff4cc;
+  color: #7a5b00;
+}
+
+.badgeCancelled {
+  background: #fde7e7;
+  color: var(--ap-color-danger);
+}
+
+.empty {
+  border: 1px dashed var(--ap-color-border);
+  border-radius: var(--ap-radius);
+  padding: 3rem var(--ap-spacing-md);
+  text-align: center;
+  color: var(--ap-color-fg-muted);
+}
