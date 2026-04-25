@@ -1,11 +1,103 @@
+import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 
-import type { MockOrder } from "../account-page-proxy/mock";
-import { getMockOrders } from "../account-page-proxy/mock";
+import { authenticate } from "../../shopify.server";
 import styles from "./styles.module.css";
 
-export const loader = async () => {
-  return { orders: getMockOrders() };
+type PaymentStatus = "Paid" | "Pending" | "Refunded";
+type FulfillmentStatus = "Fulfilled" | "Unfulfilled" | "In transit";
+
+type Order = {
+  id: string;
+  number: string;
+  placedAt: string;
+  paymentStatus: PaymentStatus;
+  fulfillmentStatus: FulfillmentStatus;
+  total: string;
+  itemCount: number;
+};
+
+const CUSTOMER_ORDERS_QUERY = `#graphql
+  query CustomerOrders($query: String!, $first: Int!) {
+    orders(first: $first, query: $query, sortKey: PROCESSED_AT, reverse: true) {
+      nodes {
+        id
+        name
+        processedAt
+        displayFinancialStatus
+        displayFulfillmentStatus
+        currentTotalPriceSet { shopMoney { amount currencyCode } }
+        subtotalLineItemsQuantity
+      }
+    }
+  }
+` as const;
+
+function mapPaymentStatus(raw: string | null | undefined): PaymentStatus {
+  switch (raw) {
+    case "PAID":
+    case "PARTIALLY_PAID":
+      return "Paid";
+    case "REFUNDED":
+    case "PARTIALLY_REFUNDED":
+    case "VOIDED":
+    case "EXPIRED":
+      return "Refunded";
+    default:
+      return "Pending";
+  }
+}
+
+function mapFulfillmentStatus(raw: string | null | undefined): FulfillmentStatus {
+  switch (raw) {
+    case "FULFILLED":
+      return "Fulfilled";
+    case "IN_PROGRESS":
+    case "PARTIALLY_FULFILLED":
+    case "ON_HOLD":
+    case "SCHEDULED":
+    case "PENDING_FULFILLMENT":
+      return "In transit";
+    default:
+      return "Unfulfilled";
+  }
+}
+
+function formatMoney(amount: string, currencyCode: string): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currencyCode,
+  }).format(parseFloat(amount));
+}
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session, admin } = await authenticate.public.appProxy(request);
+  if (!session || !admin) throw new Response("Unauthorized", { status: 401 });
+
+  const customerId = new URL(request.url).searchParams.get("logged_in_customer_id");
+  if (!customerId) throw new Response("Not signed in", { status: 401 });
+
+  const res = await admin.graphql(CUSTOMER_ORDERS_QUERY, {
+    variables: { query: `customer_id:${customerId}`, first: 20 },
+  });
+
+  const { data, errors } = await res.json();
+  if (errors) console.error("GraphQL errors:", JSON.stringify(errors.graphQLErrors.response.body, null, 2));
+
+  const orders: Order[] = (data?.orders?.nodes ?? []).map((node) => ({
+    id: node.id,
+    number: node.name,
+    placedAt: node.processedAt,
+    paymentStatus: mapPaymentStatus(node.displayFinancialStatus),
+    fulfillmentStatus: mapFulfillmentStatus(node.displayFulfillmentStatus),
+    total: formatMoney(
+      node.currentTotalPriceSet.shopMoney.amount,
+      node.currentTotalPriceSet.shopMoney.currencyCode,
+    ),
+    itemCount: node.subtotalLineItemsQuantity,
+  }));
+
+  return { orders };
 };
 
 function formatDate(iso: string) {
@@ -16,7 +108,7 @@ function formatDate(iso: string) {
   }).format(new Date(iso));
 }
 
-function paymentBadgeClass(status: MockOrder["paymentStatus"]) {
+function paymentBadgeClass(status: Order["paymentStatus"]) {
   switch (status) {
     case "Paid":
       return `${styles.badge} ${styles.badgePaid}`;
@@ -27,7 +119,7 @@ function paymentBadgeClass(status: MockOrder["paymentStatus"]) {
   }
 }
 
-function fulfillmentBadgeClass(status: MockOrder["fulfillmentStatus"]) {
+function fulfillmentBadgeClass(status: Order["fulfillmentStatus"]) {
   switch (status) {
     case "Fulfilled":
       return `${styles.badge} ${styles.badgeFulfilled}`;
