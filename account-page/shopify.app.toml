@@ -7,7 +7,6 @@ embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
 [app_proxy]
 url = "/account-page-proxy"
@@ -27,7 +26,7 @@ api_version = "2026-07"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_app_proxy"
+scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_app_proxy,read_orders"
 
 [auth]
 redirect_urls = [ "https://example.com/api/auth" ]
