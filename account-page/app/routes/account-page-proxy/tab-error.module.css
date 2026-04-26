@@ -1,0 +1,7 @@
+.tabError {
+  text-align: center;
+  padding: var(--ap-spacing-lg) var(--ap-spacing-md);
+  border: 1px solid var(--ap-color-danger);
+  border-radius: var(--ap-radius);
+  color: var(--ap-color-danger);
+}
