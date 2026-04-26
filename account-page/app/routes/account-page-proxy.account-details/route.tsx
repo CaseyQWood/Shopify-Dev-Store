@@ -1,6 +1,7 @@
 import { useLoaderData } from "react-router";
 
 import { getMockAddresses, getMockUser } from "../account-page-proxy/mock";
+import { TabError } from "../account-page-proxy/tab-error";
 import styles from "./styles.module.css";
 
 export const loader = async () => {
@@ -9,6 +10,10 @@ export const loader = async () => {
     addresses: getMockAddresses(),
   };
 };
+
+export function ErrorBoundary() {
+  return <TabError resource="account details" />;
+}
 
 export default function AccountDetailsTab() {
   const { user, addresses } = useLoaderData<typeof loader>();

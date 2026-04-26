@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { Outlet, useLoaderData } from "react-router";
+import { isRouteErrorResponse, Outlet, useLoaderData, useRouteError } from "react-router";
 
 import { authenticate } from "../../shopify.server";
 import { getMockUser } from "./mock";
@@ -122,6 +122,21 @@ export default function AccountPageLayout() {
           Please log in to view your account.
         </div>
       )}
+    </div>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const message =
+    isRouteErrorResponse(error) && error.status === 401
+      ? "Please log in to view your account."
+      : "Something went wrong. Please refresh the page.";
+  return (
+    <div className={styles.page}>
+      <div role="alert" className={styles.layoutError}>
+        {message}
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { authenticate } from "../../shopify.server";
+import { TabError } from "../account-page-proxy/tab-error";
 import styles from "./styles.module.css";
 
 type PaymentStatus = "Paid" | "Pending" | "Refunded";
@@ -71,33 +72,38 @@ function formatMoney(amount: string, currencyCode: string): string {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, admin } = await authenticate.public.appProxy(request);
-  if (!session || !admin) throw new Response("Unauthorized", { status: 401 });
+  try {
+    const { session, admin } = await authenticate.public.appProxy(request);
+    if (!session || !admin) throw new Response("not-signed-in", { status: 422 });
 
-  const customerId = new URL(request.url).searchParams.get("logged_in_customer_id");
-  if (!customerId) throw new Response("Not signed in", { status: 401 });
+    const customerId = new URL(request.url).searchParams.get("logged_in_customer_id");
+    if (!customerId) throw new Response("not-signed-in", { status: 422 });
 
-  const res = await admin.graphql(CUSTOMER_ORDERS_QUERY, {
-    variables: { query: `customer_id:${customerId}`, first: 20 },
-  });
+    const res = await admin.graphql(CUSTOMER_ORDERS_QUERY, {
+      variables: { query: `customer_id:${customerId}`, first: 20 },
+    });
 
-  const { data, errors } = await res.json();
-  if (errors) console.error("GraphQL errors:", JSON.stringify(errors.graphQLErrors.response.body, null, 2));
+    const { data } = await res.json();
 
-  const orders: Order[] = (data?.orders?.nodes ?? []).map((node) => ({
-    id: node.id,
-    number: node.name,
-    placedAt: node.processedAt,
-    paymentStatus: mapPaymentStatus(node.displayFinancialStatus),
-    fulfillmentStatus: mapFulfillmentStatus(node.displayFulfillmentStatus),
-    total: formatMoney(
-      node.currentTotalPriceSet.shopMoney.amount,
-      node.currentTotalPriceSet.shopMoney.currencyCode,
-    ),
-    itemCount: node.subtotalLineItemsQuantity,
-  }));
+    const orders: Order[] = (data?.orders?.nodes ?? []).map((node) => ({
+      id: node.id,
+      number: node.name,
+      placedAt: node.processedAt,
+      paymentStatus: mapPaymentStatus(node.displayFinancialStatus),
+      fulfillmentStatus: mapFulfillmentStatus(node.displayFulfillmentStatus),
+      total: formatMoney(
+        node.currentTotalPriceSet.shopMoney.amount,
+        node.currentTotalPriceSet.shopMoney.currencyCode,
+      ),
+      itemCount: node.subtotalLineItemsQuantity,
+    }));
 
-  return { orders };
+    return { orders };
+  } catch (err) {
+    if (err instanceof Response) throw err;
+    console.error("Orders loader error:", err);
+    throw new Response("unexpected-error", { status: 422 });
+  }
 };
 
 function formatDate(iso: string) {
@@ -128,6 +134,10 @@ function fulfillmentBadgeClass(status: Order["fulfillmentStatus"]) {
     case "In transit":
       return `${styles.badge} ${styles.badgeInTransit}`;
   }
+}
+
+export function ErrorBoundary() {
+  return <TabError resource="orders" />;
 }
 
 export default function OrdersTab() {

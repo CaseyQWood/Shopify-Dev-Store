@@ -2,6 +2,7 @@ import { useLoaderData } from "react-router";
 
 import type { MockSubscription } from "../account-page-proxy/mock";
 import { getMockSubscriptions } from "../account-page-proxy/mock";
+import { TabError } from "../account-page-proxy/tab-error";
 import styles from "./styles.module.css";
 
 export const loader = async () => {
@@ -25,6 +26,10 @@ function statusBadgeClass(status: MockSubscription["status"]) {
     case "Cancelled":
       return `${styles.badge} ${styles.badgeCancelled}`;
   }
+}
+
+export function ErrorBoundary() {
+  return <TabError resource="subscriptions" />;
 }
 
 export default function SubscriptionsTab() {
