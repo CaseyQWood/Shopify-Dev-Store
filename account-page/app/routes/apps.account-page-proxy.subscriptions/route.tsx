@@ -1,8 +1,8 @@
 import { useLoaderData } from "react-router";
 
-import type { MockSubscription } from "../account-page-proxy/mock";
-import { getMockSubscriptions } from "../account-page-proxy/mock";
-import { TabError } from "../account-page-proxy/tab-error";
+import type { MockSubscription } from "../apps.account-page-proxy/mock";
+import { getMockSubscriptions } from "../apps.account-page-proxy/mock";
+import { TabError } from "../apps.account-page-proxy/tab-error";
 import styles from "./styles.module.css";
 
 export const loader = async () => {

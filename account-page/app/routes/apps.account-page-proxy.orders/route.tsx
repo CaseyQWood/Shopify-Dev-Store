@@ -1,12 +1,20 @@
+import { useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { authenticate } from "../../shopify.server";
-import { TabError } from "../account-page-proxy/tab-error";
+import { TabError } from "../apps.account-page-proxy/tab-error";
 import styles from "./styles.module.css";
 
 type PaymentStatus = "Paid" | "Pending" | "Refunded";
 type FulfillmentStatus = "Fulfilled" | "Unfulfilled" | "In transit";
+
+type ReorderLine = {
+  variantId: string;
+  quantity: number;
+  title: string;
+  available: boolean;
+};
 
 type Order = {
   id: string;
@@ -16,6 +24,7 @@ type Order = {
   fulfillmentStatus: FulfillmentStatus;
   total: string;
   itemCount: number;
+  lineItems: ReorderLine[];
 };
 
 const CUSTOMER_ORDERS_QUERY = `#graphql
@@ -29,10 +38,36 @@ const CUSTOMER_ORDERS_QUERY = `#graphql
         displayFulfillmentStatus
         currentTotalPriceSet { shopMoney { amount currencyCode } }
         subtotalLineItemsQuantity
+        lineItems(first: 50) {
+          nodes {
+            quantity
+            title
+            variant {
+              id
+              availableForSale
+            }
+          }
+        }
       }
     }
   }
 ` as const;
+
+const VARIANT_GID_PREFIX = "gid://shopify/ProductVariant/";
+
+function mapLineItem(node: {
+  quantity: number;
+  title: string;
+  variant?: { id: string; availableForSale: boolean } | null;
+}): ReorderLine {
+  const available = !!node.variant?.availableForSale;
+  return {
+    variantId: node.variant ? node.variant.id.replace(VARIANT_GID_PREFIX, "") : "",
+    quantity: node.quantity,
+    title: node.title,
+    available,
+  };
+}
 
 function mapPaymentStatus(raw: string | null | undefined): PaymentStatus {
   switch (raw) {
@@ -73,7 +108,17 @@ function formatMoney(amount: string, currencyCode: string): string {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
-    const { session, admin } = await authenticate.public.appProxy(request);
+    let session, admin;
+    try {
+      ({ session, admin } = await authenticate.public.appProxy(request));
+    } catch (authErr) {
+      console.log(authErr, "---------")
+      console.error("[orders loader] auth threw:", authErr);
+      if (authErr instanceof Response) {
+        console.error("[orders loader] auth response status:", authErr.status, "body:", await authErr.clone().text());
+      }
+      throw authErr;
+    }
     if (!session || !admin) throw new Response("not-signed-in", { status: 422 });
 
     const customerId = new URL(request.url).searchParams.get("logged_in_customer_id");
@@ -96,6 +141,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         node.currentTotalPriceSet.shopMoney.currencyCode,
       ),
       itemCount: node.subtotalLineItemsQuantity,
+      lineItems: (node.lineItems?.nodes ?? []).map(mapLineItem),
     }));
 
     return { orders };
@@ -140,6 +186,108 @@ export function ErrorBoundary() {
   return <TabError resource="orders" />;
 }
 
+type ReorderResult =
+  | { kind: "ok" }
+  | { kind: "partial"; skipped: string[] }
+  | { kind: "empty" }
+  | { kind: "error"; message: string };
+
+async function reorder(lines: ReorderLine[]): Promise<ReorderResult> {
+  const available = lines.filter((l) => l.available && l.variantId);
+  const skipped = lines.filter((l) => !l.available || !l.variantId).map((l) => l.title);
+
+  if (available.length === 0) return { kind: "empty" };
+
+  try {
+    const res = await fetch("/cart/add.js", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: JSON.stringify({
+        items: available.map((l) => ({ id: l.variantId, quantity: l.quantity })),
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const message = typeof body?.description === "string"
+        ? body.description
+        : "We couldn't add these items to your cart. Please try again.";
+      return { kind: "error", message };
+    }
+
+    return skipped.length > 0 ? { kind: "partial", skipped } : { kind: "ok" };
+  } catch {
+    return { kind: "error", message: "Network error. Please try again." };
+  }
+}
+
+type ReorderState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "partial"; skipped: string[] }
+  | { status: "empty" }
+  | { status: "error"; message: string };
+
+function ReorderButton({ lines }: { lines: ReorderLine[] }) {
+
+  const [state, setState] = useState<ReorderState>({ status: "idle" });
+
+  async function handleClick() {
+    console.log("-----------------here-------------")
+    setState({ status: "loading" });
+    const result = await reorder(lines);
+    if (result.kind === "ok") {
+      window.location.assign("/cart");
+      return;
+    }
+    if (result.kind === "partial") {
+      setState({ status: "partial", skipped: result.skipped });
+      return;
+    }
+    if (result.kind === "empty") {
+      setState({ status: "empty" });
+      return;
+    }
+    setState({ status: "error", message: result.message });
+  }
+
+  const isLoading = state.status === "loading";
+
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.reorderButton}
+        onClick={handleClick}
+        disabled={isLoading}
+        aria-busy={isLoading}
+      >
+        {isLoading ? <span className={styles.spinner} aria-hidden="true" /> : null}
+        {isLoading ? "Adding…" : "Reorder"}
+      </button>
+      {state.status === "partial" ? (
+        <p className={`${styles.notice} ${styles.skippedNotice}`} role="status">
+          Couldn&apos;t add: {state.skipped.join(", ")}.{" "}
+          <a href="/cart" className={styles.noticeLink}>View cart</a>
+        </p>
+      ) : null}
+      {state.status === "empty" ? (
+        <p className={`${styles.notice} ${styles.errorNotice}`} role="status">
+          No items from this order are available.
+        </p>
+      ) : null}
+      {state.status === "error" ? (
+        <p className={`${styles.notice} ${styles.errorNotice}`} role="alert">
+          {state.message}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 export default function OrdersTab() {
   const { orders } = useLoaderData<typeof loader>();
 
@@ -162,6 +310,7 @@ export default function OrdersTab() {
                 <th scope="col">Fulfillment</th>
                 <th scope="col">Items</th>
                 <th scope="col">Total</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -185,6 +334,9 @@ export default function OrdersTab() {
                   </td>
                   <td data-label="Items">{order.itemCount}</td>
                   <td data-label="Total">{order.total}</td>
+                  <td data-label="Actions" className={styles.actionCell}>
+                    <ReorderButton lines={order.lineItems} />
+                  </td>
                 </tr>
               ))}
             </tbody>

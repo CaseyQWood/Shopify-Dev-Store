@@ -1,5 +1,10 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { isRouteErrorResponse, Outlet, useLoaderData, useRouteError } from "react-router";
+import {
+  isRouteErrorResponse,
+  Outlet,
+  useLoaderData,
+  useRouteError,
+} from "react-router";
 
 import { authenticate } from "../../shopify.server";
 import { getMockUser } from "./mock";
@@ -15,7 +20,20 @@ function resolveActiveTab(pathname: string): TabId | null {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.public.appProxy(request);
+  try {
+    await authenticate.public.appProxy(request);
+  } catch (err) {
+    console.error("[layout loader] auth threw:", err);
+    if (err instanceof Response) {
+      console.error(
+        "[layout loader] response status:",
+        err.status,
+        "body:",
+        await err.clone().text(),
+      );
+    }
+    throw err;
+  }
 
   const url = new URL(request.url);
   const loggedInCustomerId = url.searchParams.get("logged_in_customer_id");
@@ -47,7 +65,9 @@ export default function AccountPageLayout() {
       <header className={styles.header}>
         <h1 className={styles.title}>My Account</h1>
         {user ? (
-          <p className={styles.subtitle}>Welcome back, {'{{customer.first_name}}'}.</p>
+          <p className={styles.subtitle}>
+            Welcome back, {user.firstName}.
+          </p>
         ) : (
           <p className={styles.subtitle}>
             Manage your orders, subscriptions, and account details.
@@ -69,7 +89,9 @@ export default function AccountPageLayout() {
               <a
                 href={`${pathPrefix}/subscriptions`}
                 className={tabClass("subscriptions")}
-                aria-current={activeTab === "subscriptions" ? "page" : undefined}
+                aria-current={
+                  activeTab === "subscriptions" ? "page" : undefined
+                }
               >
                 Subscriptions
               </a>
