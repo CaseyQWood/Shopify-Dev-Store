@@ -2,14 +2,14 @@
 
 client_id = "31f6c1e20581ae326e1708b0c05e814d"
 name = "account-page"
-application_url = "https://example.com"
+application_url = "https://account-page.fly.dev"
 embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
 
 [app_proxy]
-url = "/account-page-proxy"
+url = "/apps/account-page-proxy"
 prefix = "apps"
 subpath = "account-page-proxy"
 
@@ -29,7 +29,12 @@ api_version = "2026-07"
 scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_app_proxy,read_orders"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [
+  "https://account-page.fly.dev/auth/callback",
+  "https://account-page.fly.dev/auth/shopify/callback",
+  "https://account-page.fly.dev/api/auth/callback",
+  "https://account-page.fly.dev/api/auth"
+]
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
