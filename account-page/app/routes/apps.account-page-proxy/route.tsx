@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import {
   isRouteErrorResponse,
+  NavLink,
   Outlet,
   useLoaderData,
   useRouteError,
@@ -10,13 +11,10 @@ import { authenticate } from "../../shopify.server";
 import { getMockUser } from "./mock";
 import styles from "./styles.module.css";
 
-type TabId = "orders" | "subscriptions" | "account-details";
-
-function resolveActiveTab(pathname: string): TabId | null {
-  if (pathname.endsWith("/orders")) return "orders";
-  if (pathname.endsWith("/subscriptions")) return "subscriptions";
-  if (pathname.endsWith("/account-details")) return "account-details";
-  return null;
+function normalizePathPrefix(pathPrefix: string | null) {
+  const fallback = "/apps/account-page-proxy";
+  const value = pathPrefix || fallback;
+  return value === "/" ? "" : value.replace(/\/$/, "");
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -38,8 +36,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const loggedInCustomerId = url.searchParams.get("logged_in_customer_id");
   const shop = url.searchParams.get("shop");
-  const pathPrefix = url.searchParams.get("path_prefix") ?? "";
-  const activeTab = resolveActiveTab(url.pathname);
+  const pathPrefix = normalizePathPrefix(url.searchParams.get("path_prefix"));
 
   const user = loggedInCustomerId ? getMockUser() : null;
 
@@ -48,26 +45,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     loggedInCustomerId,
     user,
     pathPrefix,
-    activeTab,
   };
 };
 
 export default function AccountPageLayout() {
-  const { user, pathPrefix, activeTab } = useLoaderData<typeof loader>();
+  const { user, pathPrefix } = useLoaderData<typeof loader>();
 
-  const tabClass = (tab: TabId) =>
-    activeTab === tab
-      ? `${styles.tabLink} ${styles.tabLinkActive}`
-      : styles.tabLink;
+  const tabClass = ({ isActive }: { isActive: boolean }) =>
+    isActive ? `${styles.tabLink} ${styles.tabLinkActive}` : styles.tabLink;
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <h1 className={styles.title}>My Account</h1>
         {user ? (
-          <p className={styles.subtitle}>
-            Welcome back, {user.firstName}.
-          </p>
+          <p className={styles.subtitle}>Welcome back, {user.firstName}.</p>
         ) : (
           <p className={styles.subtitle}>
             Manage your orders, subscriptions, and account details.
@@ -79,31 +71,18 @@ export default function AccountPageLayout() {
         <div className={styles.layout}>
           <main className={styles.main}>
             <nav className={styles.tabNav} aria-label="Account sections">
-              <a
-                href={`${pathPrefix}/orders`}
-                className={tabClass("orders")}
-                aria-current={activeTab === "orders" ? "page" : undefined}
-              >
+              <NavLink to={`${pathPrefix}/orders`} className={tabClass}>
                 Orders
-              </a>
-              <a
-                href={`${pathPrefix}/subscriptions`}
-                className={tabClass("subscriptions")}
-                aria-current={
-                  activeTab === "subscriptions" ? "page" : undefined
-                }
-              >
+              </NavLink>
+              <NavLink to={`${pathPrefix}/subscriptions`} className={tabClass}>
                 Subscriptions
-              </a>
-              <a
-                href={`${pathPrefix}/account-details`}
-                className={tabClass("account-details")}
-                aria-current={
-                  activeTab === "account-details" ? "page" : undefined
-                }
+              </NavLink>
+              <NavLink
+                to={`${pathPrefix}/account-details`}
+                className={tabClass}
               >
                 Account Details
-              </a>
+              </NavLink>
             </nav>
             <div className={styles.tabPanel}>
               <Outlet />
