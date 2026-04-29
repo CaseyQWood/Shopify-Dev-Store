@@ -38,8 +38,6 @@ export default async function handleRequest(
               ? "application/liquid"
               : "text/html; charset=utf-8",
           );
-          responseHeaders.set("Access-Control-Allow-Origin", "*");
-          responseHeaders.set("Access-Control-Allow-Methods", "GET, OPTIONS");
           resolve(
             new Response(stream, {
               headers: responseHeaders,
