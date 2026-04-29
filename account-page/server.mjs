@@ -21,6 +21,15 @@ function setAssetHeaders(res) {
 app.disable("x-powered-by");
 app.use(compression());
 
+morgan.token("safe-url", (req) => {
+  const originalUrl = req.originalUrl || req.url || "";
+  const pathname = originalUrl.split("?")[0] || originalUrl;
+
+  return pathname.startsWith("/apps/account-page-proxy")
+    ? pathname
+    : originalUrl;
+});
+
 app.use(
   "/assets",
   express.static(path.join(clientBuildDirectory, "assets"), {
@@ -36,7 +45,9 @@ app.use(
   }),
 );
 app.use(express.static("public", { maxAge: "1h" }));
-app.use(morgan("tiny"));
+app.use(
+  morgan(":method :safe-url :status :res[content-length] - :response-time ms"),
+);
 
 app.all(
   "*",
