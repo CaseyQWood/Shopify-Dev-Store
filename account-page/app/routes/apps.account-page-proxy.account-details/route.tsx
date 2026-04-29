@@ -1,10 +1,14 @@
+import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 
+import { authenticateLoggedInCustomerAppProxyRequest } from "../../app-proxy.server";
 import { getMockAddresses, getMockUser } from "../apps.account-page-proxy/mock";
 import { TabError } from "../apps.account-page-proxy/tab-error";
 import styles from "./styles.module.css";
 
-export const loader = async () => {
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  await authenticateLoggedInCustomerAppProxyRequest(request);
+
   return {
     user: getMockUser(),
     addresses: getMockAddresses(),

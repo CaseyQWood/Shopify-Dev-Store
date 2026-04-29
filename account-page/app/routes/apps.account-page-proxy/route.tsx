@@ -7,42 +7,18 @@ import {
   useRouteError,
 } from "react-router";
 
-import { authenticate } from "../../shopify.server";
+import { authenticateAppProxyRequest } from "../../app-proxy.server";
 import { getMockUser } from "./mock";
 import styles from "./styles.module.css";
 
-function normalizePathPrefix(pathPrefix: string | null) {
-  const fallback = "/apps/account-page-proxy";
-  const value = pathPrefix || fallback;
-  return value === "/" ? "" : value.replace(/\/$/, "");
-}
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  try {
-    await authenticate.public.appProxy(request);
-  } catch (err) {
-    console.error("[layout loader] auth threw:", err);
-    if (err instanceof Response) {
-      console.error(
-        "[layout loader] response status:",
-        err.status,
-        "body:",
-        await err.clone().text(),
-      );
-    }
-    throw err;
-  }
-
-  const url = new URL(request.url);
-  const loggedInCustomerId = url.searchParams.get("logged_in_customer_id");
-  const shop = url.searchParams.get("shop");
-  const pathPrefix = normalizePathPrefix(url.searchParams.get("path_prefix"));
-
-  const user = loggedInCustomerId ? getMockUser() : null;
+  const { customerId, pathPrefix, shop } =
+    await authenticateAppProxyRequest(request);
+  const user = customerId ? getMockUser() : null;
 
   return {
     shop,
-    loggedInCustomerId,
+    loggedInCustomerId: customerId,
     user,
     pathPrefix,
   };

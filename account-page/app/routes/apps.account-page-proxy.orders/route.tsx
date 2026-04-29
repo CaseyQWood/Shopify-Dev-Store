@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 
-import { authenticate } from "../../shopify.server";
+import { authenticateCustomerAdminAppProxyRequest } from "../../app-proxy.server";
 import { TabError } from "../apps.account-page-proxy/tab-error";
 import styles from "./styles.module.css";
 
@@ -197,28 +197,8 @@ function formatMoney(amount: string, currencyCode: string): string {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
-    let session, admin;
-    try {
-      ({ session, admin } = await authenticate.public.appProxy(request));
-    } catch (authErr) {
-      console.error("[orders loader] auth threw:", authErr);
-      if (authErr instanceof Response) {
-        console.error(
-          "[orders loader] auth response status:",
-          authErr.status,
-          "body:",
-          await authErr.clone().text(),
-        );
-      }
-      throw authErr;
-    }
-    if (!session || !admin)
-      throw new Response("not-signed-in", { status: 422 });
-
-    const customerId = new URL(request.url).searchParams.get(
-      "logged_in_customer_id",
-    );
-    if (!customerId) throw new Response("not-signed-in", { status: 422 });
+    const { admin, customerId } =
+      await authenticateCustomerAdminAppProxyRequest(request);
 
     const res = await admin.graphql(CUSTOMER_ORDERS_QUERY, {
       variables: { query: `customer_id:${customerId}`, first: 20 },
@@ -284,8 +264,7 @@ export function ErrorBoundary() {
 
 type ReorderResult =
   | { kind: "ok" }
-  | { kind: "partial"; skipped: string[] }
-  | { kind: "empty" }
+  | { kind: "partial" }
   | { kind: "error"; message: string };
 
 function getCartAddUrl() {
@@ -325,86 +304,50 @@ function buildCartItem(line: AddableReorderLine): CartItem {
   return item;
 }
 
-async function readCartError(response: Response) {
-  const fallback = "We couldn't add this item to your cart.";
-  const text = await response.text().catch(() => "");
+async function reorder(lines: ReorderLine[]): Promise<ReorderResult> {
+  const available = lines.filter(isAddableLine);
+  const skippedCount = lines.length - available.length;
 
-  if (!text) return fallback;
+  if (available.length === 0) {
+    return {
+      kind: "error",
+      message: "No items from this order could be added to your cart.",
+    };
+  }
 
   try {
-    const body = JSON.parse(text) as {
-      description?: unknown;
-      message?: unknown;
-    };
+    const res = await fetch(getCartAddUrl(), {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: JSON.stringify({
+        items: available.map(buildCartItem),
+      }),
+    });
 
-    if (typeof body.description === "string") return body.description;
-    if (typeof body.message === "string") return body.message;
-  } catch {
-    return text;
-  }
-
-  return fallback;
-}
-
-async function reorder(lines: ReorderLine[]): Promise<ReorderResult> {
-  const skipped = lines
-    .map(getSkipReason)
-    .filter((reason): reason is string => reason !== null);
-  const available = lines.filter(isAddableLine);
-
-  if (available.length === 0) return { kind: "empty" };
-
-  const failed = [...skipped];
-  let addedCount = 0;
-
-  for (const line of available) {
-    try {
-      const res = await fetch(getCartAddUrl(), {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "X-Requested-With": "XMLHttpRequest",
-        },
-        body: JSON.stringify({
-          items: [buildCartItem(line)],
-        }),
-      });
-
-      if (!res.ok) {
-        failed.push(`${line.title}: ${await readCartError(res)}`);
-        continue;
-      }
-
-      addedCount += 1;
-    } catch {
-      failed.push(`${line.title}: network error`);
+    if (!res.ok) {
+      return {
+        kind: "error",
+        message: "We couldn't add any items to your cart. Please try again.",
+      };
     }
+
+    return skippedCount > 0 ? { kind: "partial" } : { kind: "ok" };
+  } catch {
+    return {
+      kind: "error",
+      message: "We couldn't add any items to your cart. Please try again.",
+    };
   }
-
-  if (addedCount > 0 && failed.length === 0) return { kind: "ok" };
-  if (addedCount > 0) return { kind: "partial", skipped: failed };
-
-  return {
-    kind: "error",
-    message:
-      failed[0] ??
-      "We couldn't add these items to your cart. Please try again.",
-  };
-}
-
-function formatSkippedLines(skipped: string[]) {
-  if (skipped.length === 1) return skipped[0];
-
-  const [first, ...rest] = skipped;
-  return `${first} and ${rest.length} more`;
 }
 
 type ReorderState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "partial"; skipped: string[] }
-  | { status: "empty" }
+  | { status: "partial" }
   | { status: "error"; message: string };
 
 function ReorderButton({ lines }: { lines: ReorderLine[] }) {
@@ -430,11 +373,7 @@ function ReorderButton({ lines }: { lines: ReorderLine[] }) {
       return;
     }
     if (result.kind === "partial") {
-      setState({ status: "partial", skipped: result.skipped });
-      return;
-    }
-    if (result.kind === "empty") {
-      setState({ status: "empty" });
+      setState({ status: "partial" });
       return;
     }
     setState({ status: "error", message: result.message });
@@ -458,16 +397,10 @@ function ReorderButton({ lines }: { lines: ReorderLine[] }) {
       </button>
       {state.status === "partial" ? (
         <p className={`${styles.notice} ${styles.skippedNotice}`} role="status">
-          Some items were added. Couldn&apos;t add:{" "}
-          {formatSkippedLines(state.skipped)}.{" "}
+          Some items were unable to be added to your cart.{" "}
           <a href="/cart" className={styles.noticeLink}>
             View cart
           </a>
-        </p>
-      ) : null}
-      {state.status === "empty" ? (
-        <p className={`${styles.notice} ${styles.errorNotice}`} role="status">
-          No items from this order are available.
         </p>
       ) : null}
       {state.status === "error" ? (

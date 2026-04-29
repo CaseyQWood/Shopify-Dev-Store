@@ -3,10 +3,8 @@ import { isRouteErrorResponse, useRouteError } from "react-router";
 import styles from "./tab-error.module.css";
 
 export function TabError({ resource }: { resource: string }) {
-  console.log("Tab Error hit: ",)
   const error = useRouteError();
   const reason = isRouteErrorResponse(error) ? error.data : null;
-  console.log("Tab Error hit: ", reason)
 
   const message =
     reason === "not-signed-in"
