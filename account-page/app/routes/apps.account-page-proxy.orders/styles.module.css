@@ -87,6 +87,80 @@
   color: var(--ap-color-fg-muted);
 }
 
+.actionCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.reorderButton {
+  appearance: none;
+  font: inherit;
+  background: #fff;
+  border: 1px solid var(--ap-color-accent);
+  color: var(--ap-color-accent);
+  padding: 0.6rem 1.2rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.3rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.reorderButton:hover:not(:disabled) {
+  background: var(--ap-color-accent);
+  color: #fff;
+}
+
+.reorderButton:focus-visible {
+  outline: 2px solid var(--ap-color-accent);
+  outline-offset: 2px;
+}
+
+.reorderButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinner {
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.notice {
+  margin-top: 0.6rem;
+  font-size: 1.2rem;
+  line-height: 1.4;
+  white-space: normal;
+  text-align: left;
+  max-width: 28rem;
+}
+
+.skippedNotice {
+  color: var(--ap-color-fg-muted);
+}
+
+.errorNotice {
+  color: var(--ap-color-danger);
+}
+
+.noticeLink {
+  color: var(--ap-color-accent);
+  text-decoration: underline;
+  margin-left: 0.4rem;
+}
+
 @media (max-width: 749px) {
   .table thead {
     display: none;
@@ -120,5 +194,26 @@
 
   .table tbody tr + tr td {
     border-top: 0;
+  }
+
+  .actionCell {
+    text-align: left;
+    white-space: normal;
+    flex-direction: column;
+    align-items: stretch;
+    padding-top: 1rem;
+  }
+
+  .actionCell::before {
+    display: none;
+  }
+
+  .reorderButton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .notice {
+    max-width: none;
   }
 }

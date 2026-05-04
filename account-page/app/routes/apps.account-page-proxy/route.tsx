@@ -1,53 +1,41 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { Outlet, useLoaderData } from "react-router";
+import {
+  isRouteErrorResponse,
+  NavLink,
+  Outlet,
+  useLoaderData,
+  useRouteError,
+} from "react-router";
 
-import { authenticate } from "../../shopify.server";
+import { authenticateAppProxyRequest } from "../../app-proxy.server";
 import { getMockUser } from "./mock";
 import styles from "./styles.module.css";
 
-type TabId = "orders" | "subscriptions" | "account-details";
-
-function resolveActiveTab(pathname: string): TabId | null {
-  if (pathname.endsWith("/orders")) return "orders";
-  if (pathname.endsWith("/subscriptions")) return "subscriptions";
-  if (pathname.endsWith("/account-details")) return "account-details";
-  return null;
-}
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.public.appProxy(request);
-
-  const url = new URL(request.url);
-  const loggedInCustomerId = url.searchParams.get("logged_in_customer_id");
-  const shop = url.searchParams.get("shop");
-  const pathPrefix = url.searchParams.get("path_prefix") ?? "";
-  const activeTab = resolveActiveTab(url.pathname);
-
-  const user = loggedInCustomerId ? getMockUser() : null;
+  const { customerId, pathPrefix, shop } =
+    await authenticateAppProxyRequest(request);
+  const user = customerId ? getMockUser() : null;
 
   return {
     shop,
-    loggedInCustomerId,
+    loggedInCustomerId: customerId,
     user,
     pathPrefix,
-    activeTab,
   };
 };
 
 export default function AccountPageLayout() {
-  const { user, pathPrefix, activeTab } = useLoaderData<typeof loader>();
+  const { user, pathPrefix } = useLoaderData<typeof loader>();
 
-  const tabClass = (tab: TabId) =>
-    activeTab === tab
-      ? `${styles.tabLink} ${styles.tabLinkActive}`
-      : styles.tabLink;
+  const tabClass = ({ isActive }: { isActive: boolean }) =>
+    isActive ? `${styles.tabLink} ${styles.tabLinkActive}` : styles.tabLink;
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <h1 className={styles.title}>My Account</h1>
         {user ? (
-          <p className={styles.subtitle}>Welcome back, {'{{customer.first_name}}'}.</p>
+          <p className={styles.subtitle}>Welcome back, {user.firstName}.</p>
         ) : (
           <p className={styles.subtitle}>
             Manage your orders, subscriptions, and account details.
@@ -59,29 +47,18 @@ export default function AccountPageLayout() {
         <div className={styles.layout}>
           <main className={styles.main}>
             <nav className={styles.tabNav} aria-label="Account sections">
-              <a
-                href={`${pathPrefix}/orders`}
-                className={tabClass("orders")}
-                aria-current={activeTab === "orders" ? "page" : undefined}
-              >
+              <NavLink to={`${pathPrefix}/orders`} className={tabClass}>
                 Orders
-              </a>
-              <a
-                href={`${pathPrefix}/subscriptions`}
-                className={tabClass("subscriptions")}
-                aria-current={activeTab === "subscriptions" ? "page" : undefined}
-              >
+              </NavLink>
+              <NavLink to={`${pathPrefix}/subscriptions`} className={tabClass}>
                 Subscriptions
-              </a>
-              <a
-                href={`${pathPrefix}/account-details`}
-                className={tabClass("account-details")}
-                aria-current={
-                  activeTab === "account-details" ? "page" : undefined
-                }
+              </NavLink>
+              <NavLink
+                to={`${pathPrefix}/account-details`}
+                className={tabClass}
               >
                 Account Details
-              </a>
+              </NavLink>
             </nav>
             <div className={styles.tabPanel}>
               <Outlet />
@@ -122,6 +99,21 @@ export default function AccountPageLayout() {
           Please log in to view your account.
         </div>
       )}
+    </div>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const message =
+    isRouteErrorResponse(error) && error.status === 401
+      ? "Please log in to view your account."
+      : "Something went wrong. Please refresh the page.";
+  return (
+    <div className={styles.page}>
+      <div role="alert" className={styles.layoutError}>
+        {message}
+      </div>
     </div>
   );
 }

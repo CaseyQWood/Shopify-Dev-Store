@@ -1,10 +1,15 @@
+import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 
-import type { MockSubscription } from "../account-page-proxy/mock";
-import { getMockSubscriptions } from "../account-page-proxy/mock";
+import { authenticateLoggedInCustomerAppProxyRequest } from "../../app-proxy.server";
+import type { MockSubscription } from "../apps.account-page-proxy/mock";
+import { getMockSubscriptions } from "../apps.account-page-proxy/mock";
+import { TabError } from "../apps.account-page-proxy/tab-error";
 import styles from "./styles.module.css";
 
-export const loader = async () => {
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  await authenticateLoggedInCustomerAppProxyRequest(request);
+
   return { subscriptions: getMockSubscriptions() };
 };
 
@@ -25,6 +30,10 @@ function statusBadgeClass(status: MockSubscription["status"]) {
     case "Cancelled":
       return `${styles.badge} ${styles.badgeCancelled}`;
   }
+}
+
+export function ErrorBoundary() {
+  return <TabError resource="subscriptions" />;
 }
 
 export default function SubscriptionsTab() {

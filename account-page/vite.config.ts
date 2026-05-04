@@ -18,6 +18,11 @@ if (
 const host = new URL(process.env.SHOPIFY_APP_URL || "http://localhost")
   .hostname;
 
+const appUrl = process.env.SHOPIFY_APP_URL
+  ? new URL(process.env.SHOPIFY_APP_URL)
+  : null;
+const base = appUrl ? new URL("/", appUrl).href : "/";
+
 let hmrConfig;
 if (host === "localhost") {
   hmrConfig = {
@@ -38,9 +43,7 @@ if (host === "localhost") {
 export default defineConfig({
   server: {
     allowedHosts: [host],
-    cors: {
-      preflightContinue: true,
-    },
+    cors: true,
     port: Number(process.env.PORT || 3000),
     hmr: hmrConfig,
     fs: {
@@ -48,10 +51,8 @@ export default defineConfig({
       allow: ["app", "node_modules"],
     },
   },
-  plugins: [
-    reactRouter(),
-    tsconfigPaths(),
-  ],
+  base,
+  plugins: [reactRouter(), tsconfigPaths()],
   build: {
     assetsInlineLimit: 0,
   },

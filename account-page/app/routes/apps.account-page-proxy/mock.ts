@@ -18,16 +18,6 @@ export type MockUser = {
   defaultAddress: MockAddress;
 };
 
-export type MockOrder = {
-  id: string;
-  number: string;
-  placedAt: string;
-  paymentStatus: "Paid" | "Pending" | "Refunded";
-  fulfillmentStatus: "Fulfilled" | "Unfulfilled" | "In transit";
-  total: string;
-  itemCount: number;
-};
-
 export type MockSubscription = {
   id: string;
   name: string;
@@ -72,38 +62,6 @@ export function getMockUser(): MockUser {
 
 export function getMockAddresses(): MockAddress[] {
   return [DEFAULT_ADDRESS, SECOND_ADDRESS];
-}
-
-export function getMockOrders(): MockOrder[] {
-  return [
-    {
-      id: "gid://Order/1001",
-      number: "#1001",
-      placedAt: "2026-04-12",
-      paymentStatus: "Paid",
-      fulfillmentStatus: "Fulfilled",
-      total: "$128.40",
-      itemCount: 3,
-    },
-    {
-      id: "gid://Order/1002",
-      number: "#1002",
-      placedAt: "2026-03-28",
-      paymentStatus: "Paid",
-      fulfillmentStatus: "In transit",
-      total: "$54.00",
-      itemCount: 1,
-    },
-    {
-      id: "gid://Order/1003",
-      number: "#1003",
-      placedAt: "2026-02-14",
-      paymentStatus: "Refunded",
-      fulfillmentStatus: "Fulfilled",
-      total: "$22.95",
-      itemCount: 1,
-    },
-  ];
 }
 
 export function getMockSubscriptions(): MockSubscription[] {
