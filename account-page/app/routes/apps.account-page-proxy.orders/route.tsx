@@ -3,194 +3,17 @@ import { useLoaderData } from "react-router";
 
 import { authenticateCustomerAdminAppProxyRequest } from "../../app-proxy.server";
 import { TabError } from "../apps.account-page-proxy/tab-error";
-import { ReorderButton, type ReorderLine } from "./reorder-button";
+import { getCustomerOrders, type Order } from "./orders.server";
+import { ReorderButton } from "./reorder-button";
 import styles from "./styles.module.css";
 
-type PaymentStatus = "Paid" | "Pending" | "Refunded";
-type FulfillmentStatus = "Fulfilled" | "Unfulfilled" | "In transit";
-
-type CustomerOrderLineItemNode = {
-  quantity: number;
-  currentQuantity?: number;
-  title: string;
-  customAttributes?: Array<{ key: string; value?: string | null }> | null;
-  sellingPlan?: { sellingPlanId?: string | null } | null;
-  variant?: { id: string; availableForSale: boolean } | null;
-};
-
-type CustomerOrderNode = {
-  id: string;
-  name: string;
-  processedAt: string;
-  displayFinancialStatus?: string | null;
-  displayFulfillmentStatus?: string | null;
-  currentTotalPriceSet: {
-    shopMoney: {
-      amount: string;
-      currencyCode: string;
-    };
-  };
-  subtotalLineItemsQuantity: number;
-  lineItems?: {
-    nodes?: CustomerOrderLineItemNode[] | null;
-  } | null;
-};
-
-type CustomerOrdersResponse = {
-  orders?: {
-    nodes?: CustomerOrderNode[] | null;
-  } | null;
-};
-
-type Order = {
-  id: string;
-  number: string;
-  placedAt: string;
-  paymentStatus: PaymentStatus;
-  fulfillmentStatus: FulfillmentStatus;
-  total: string;
-  itemCount: number;
-  lineItems: ReorderLine[];
-};
-
-const CUSTOMER_ORDERS_QUERY = `#graphql
-  query CustomerOrders($query: String!, $first: Int!) {
-    orders(first: $first, query: $query, sortKey: PROCESSED_AT, reverse: true) {
-      nodes {
-        id
-        name
-        processedAt
-        displayFinancialStatus
-        displayFulfillmentStatus
-        currentTotalPriceSet { shopMoney { amount currencyCode } }
-        subtotalLineItemsQuantity
-        lineItems(first: 50) {
-          nodes {
-            quantity
-            currentQuantity
-            title
-            customAttributes {
-              key
-              value
-            }
-            sellingPlan {
-              sellingPlanId
-            }
-            variant {
-              id
-              availableForSale
-            }
-          }
-        }
-      }
-    }
-  }
-` as const;
-
-const VARIANT_GID_PREFIX = "gid://shopify/ProductVariant/";
-const SELLING_PLAN_GID_PREFIX = "gid://shopify/SellingPlan/";
-
-function numericIdFromGid(id: string | null | undefined, prefix: string) {
-  const numericId = id?.startsWith(prefix) ? id.slice(prefix.length) : null;
-  if (!numericId || !/^\d+$/.test(numericId)) return null;
-
-  return Number(numericId);
-}
-
-function mapCustomAttributes(
-  attributes: Array<{ key: string; value?: string | null }> | null | undefined,
-) {
-  const properties: Record<string, string> = {};
-
-  for (const attribute of attributes ?? []) {
-    if (attribute.key && attribute.value != null) {
-      properties[attribute.key] = attribute.value;
-    }
-  }
-
-  return properties;
-}
-
-function mapLineItem(node: CustomerOrderLineItemNode): ReorderLine {
-  const variantId = numericIdFromGid(node.variant?.id, VARIANT_GID_PREFIX);
-  const available = !!node.variant?.availableForSale;
-
-  return {
-    variantId,
-    sellingPlanId: numericIdFromGid(
-      node.sellingPlan?.sellingPlanId,
-      SELLING_PLAN_GID_PREFIX,
-    ),
-    quantity: Math.max(0, node.currentQuantity ?? node.quantity),
-    title: node.title,
-    available,
-    properties: mapCustomAttributes(node.customAttributes),
-  };
-}
-
-function mapPaymentStatus(raw: string | null | undefined): PaymentStatus {
-  switch (raw) {
-    case "PAID":
-    case "PARTIALLY_PAID":
-      return "Paid";
-    case "REFUNDED":
-    case "PARTIALLY_REFUNDED":
-    case "VOIDED":
-    case "EXPIRED":
-      return "Refunded";
-    default:
-      return "Pending";
-  }
-}
-
-function mapFulfillmentStatus(
-  raw: string | null | undefined,
-): FulfillmentStatus {
-  switch (raw) {
-    case "FULFILLED":
-      return "Fulfilled";
-    case "IN_PROGRESS":
-    case "PARTIALLY_FULFILLED":
-    case "ON_HOLD":
-    case "SCHEDULED":
-    case "PENDING_FULFILLMENT":
-      return "In transit";
-    default:
-      return "Unfulfilled";
-  }
-}
-
-function formatMoney(amount: string, currencyCode: string): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currencyCode,
-  }).format(parseFloat(amount));
-}
+const DISPLAY_LOCALE = "en-US";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     const { admin, customerId } =
       await authenticateCustomerAdminAppProxyRequest(request);
-
-    const res = await admin.graphql(CUSTOMER_ORDERS_QUERY, {
-      variables: { query: `customer_id:${customerId}`, first: 20 },
-    });
-
-    const { data } = (await res.json()) as { data?: CustomerOrdersResponse };
-
-    const orders: Order[] = (data?.orders?.nodes ?? []).map((node) => ({
-      id: node.id,
-      number: node.name,
-      placedAt: node.processedAt,
-      paymentStatus: mapPaymentStatus(node.displayFinancialStatus),
-      fulfillmentStatus: mapFulfillmentStatus(node.displayFulfillmentStatus),
-      total: formatMoney(
-        node.currentTotalPriceSet.shopMoney.amount,
-        node.currentTotalPriceSet.shopMoney.currencyCode,
-      ),
-      itemCount: node.subtotalLineItemsQuantity,
-      lineItems: (node.lineItems?.nodes ?? []).map(mapLineItem),
-    }));
+    const orders = await getCustomerOrders(admin, customerId);
 
     return { orders };
   } catch (err) {
@@ -201,7 +24,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 function formatDate(iso: string) {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(DISPLAY_LOCALE, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -230,6 +53,57 @@ function fulfillmentBadgeClass(status: Order["fulfillmentStatus"]) {
   }
 }
 
+function OrderRow({ order }: { order: Order }) {
+  return (
+    <tr>
+      <td data-label="Order" className={styles.orderNumber}>
+        {order.number}
+      </td>
+      <td data-label="Date">{formatDate(order.placedAt)}</td>
+      <td data-label="Payment">
+        <span className={paymentBadgeClass(order.paymentStatus)}>
+          {order.paymentStatus}
+        </span>
+      </td>
+      <td data-label="Fulfillment">
+        <span className={fulfillmentBadgeClass(order.fulfillmentStatus)}>
+          {order.fulfillmentStatus}
+        </span>
+      </td>
+      <td data-label="Items">{order.itemCount}</td>
+      <td data-label="Total">{order.total}</td>
+      <td data-label="Actions" className={styles.actionCell}>
+        <ReorderButton lineItems={order.lineItems} />
+      </td>
+    </tr>
+  );
+}
+
+function OrdersTable({ orders }: { orders: Order[] }) {
+  return (
+    <div className={styles.tableWrap}>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th scope="col">Order</th>
+            <th scope="col">Date</th>
+            <th scope="col">Payment</th>
+            <th scope="col">Fulfillment</th>
+            <th scope="col">Items</th>
+            <th scope="col">Total</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((order) => (
+            <OrderRow key={order.id} order={order} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function ErrorBoundary() {
   return <TabError resource="orders" />;
 }
@@ -248,48 +122,7 @@ export default function OrdersTab() {
           You haven&apos;t placed any orders yet.
         </div>
       ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th scope="col">Order</th>
-                <th scope="col">Date</th>
-                <th scope="col">Payment</th>
-                <th scope="col">Fulfillment</th>
-                <th scope="col">Items</th>
-                <th scope="col">Total</th>
-                <th scope="col">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr key={order.id}>
-                  <td data-label="Order" className={styles.orderNumber}>
-                    {order.number}
-                  </td>
-                  <td data-label="Date">{formatDate(order.placedAt)}</td>
-                  <td data-label="Payment">
-                    <span className={paymentBadgeClass(order.paymentStatus)}>
-                      {order.paymentStatus}
-                    </span>
-                  </td>
-                  <td data-label="Fulfillment">
-                    <span
-                      className={fulfillmentBadgeClass(order.fulfillmentStatus)}
-                    >
-                      {order.fulfillmentStatus}
-                    </span>
-                  </td>
-                  <td data-label="Items">{order.itemCount}</td>
-                  <td data-label="Total">{order.total}</td>
-                  <td data-label="Actions" className={styles.actionCell}>
-                    <ReorderButton lineItems={order.lineItems} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <OrdersTable orders={orders} />
       )}
     </section>
   );

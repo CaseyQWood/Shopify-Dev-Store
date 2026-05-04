@@ -133,7 +133,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .notice {
@@ -157,29 +159,6 @@
   color: var(--ap-color-accent);
   text-decoration: underline;
   margin-left: 0.4rem;
-}
-
-@media (max-width: 749px) {
-  .actionCell {
-    text-align: left;
-    white-space: normal;
-    flex-direction: column;
-    align-items: stretch;
-    padding-top: 1rem;
-  }
-
-  .actionCell::before {
-    display: none;
-  }
-
-  .reorderButton {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .notice {
-    max-width: none;
-  }
 }
 
 @media (max-width: 749px) {
@@ -215,5 +194,26 @@
 
   .table tbody tr + tr td {
     border-top: 0;
+  }
+
+  .actionCell {
+    text-align: left;
+    white-space: normal;
+    flex-direction: column;
+    align-items: stretch;
+    padding-top: 1rem;
+  }
+
+  .actionCell::before {
+    display: none;
+  }
+
+  .reorderButton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .notice {
+    max-width: none;
   }
 }

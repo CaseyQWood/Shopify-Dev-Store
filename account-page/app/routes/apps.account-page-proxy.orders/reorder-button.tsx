@@ -41,18 +41,38 @@ type ReorderState =
   | { status: "partial" }
   | { status: "error"; message: string };
 
-function getCartAddUrl() {
+const ADD_TO_CART_ERROR_MESSAGE =
+  "We couldn't add any items to your cart. Please try again.";
+const EMPTY_REORDER_ERROR_MESSAGE =
+  "No items from this order could be added to your cart.";
+const CART_ERROR_BODY_PREVIEW_LENGTH = 500;
+
+function getShopifyUrl(path: string) {
   const routeRoot = window.Shopify?.routes?.root ?? "/";
   const normalizedRoot = routeRoot.endsWith("/") ? routeRoot : `${routeRoot}/`;
+  const normalizedPath = path.replace(/^\/+/, "");
 
-  return `${normalizedRoot}cart/add.js`;
+  return `${normalizedRoot}${normalizedPath}`;
+}
+
+function getCartAddUrl() {
+  return getShopifyUrl("cart/add.js");
+}
+
+function getCartUrl() {
+  return getShopifyUrl("cart");
 }
 
 function getSkipReason(line: ReorderLine) {
-  if (!line.variantId)
+  if (!line.variantId) {
     return `${line.title}: no longer has an orderable variant`;
-  if (!line.available) return `${line.title}: not available for sale`;
-  if (line.quantity < 1) return `${line.title}: no quantity left to reorder`;
+  }
+  if (!line.available) {
+    return `${line.title}: not available for sale`;
+  }
+  if (line.quantity < 1) {
+    return `${line.title}: no quantity left to reorder`;
+  }
 
   return null;
 }
@@ -62,20 +82,31 @@ function isAddableLine(line: ReorderLine): line is AddableReorderLine {
 }
 
 function buildCartItem(line: AddableReorderLine): CartItem {
-  const item: CartItem = {
+  return {
     id: line.variantId,
     quantity: line.quantity,
+    ...(line.sellingPlanId ? { selling_plan: line.sellingPlanId } : {}),
+    ...(Object.keys(line.properties).length > 0
+      ? { properties: { ...line.properties } }
+      : {}),
   };
+}
 
-  if (line.sellingPlanId) {
-    item.selling_plan = line.sellingPlanId;
+async function readCartErrorBody(response: Response) {
+  try {
+    return (await response.text()).slice(0, CART_ERROR_BODY_PREVIEW_LENGTH);
+  } catch (error) {
+    console.error("Unable to read cart add error response:", error);
+    return null;
   }
+}
 
-  if (Object.keys(line.properties).length > 0) {
-    item.properties = line.properties;
-  }
-
-  return item;
+async function logCartResponseError(response: Response) {
+  console.error("Cart add request failed:", {
+    status: response.status,
+    statusText: response.statusText,
+    body: await readCartErrorBody(response),
+  });
 }
 
 async function reorder(lineItems: ReorderLine[]): Promise<ReorderResult> {
@@ -85,7 +116,7 @@ async function reorder(lineItems: ReorderLine[]): Promise<ReorderResult> {
   if (available.length === 0) {
     return {
       kind: "error",
-      message: "No items from this order could be added to your cart.",
+      message: EMPTY_REORDER_ERROR_MESSAGE,
     };
   }
 
@@ -103,17 +134,21 @@ async function reorder(lineItems: ReorderLine[]): Promise<ReorderResult> {
     });
 
     if (!res.ok) {
+      await logCartResponseError(res);
+
       return {
         kind: "error",
-        message: "We couldn't add any items to your cart. Please try again.",
+        message: ADD_TO_CART_ERROR_MESSAGE,
       };
     }
 
     return skippedCount > 0 ? { kind: "partial" } : { kind: "ok" };
-  } catch {
+  } catch (error) {
+    console.error("Cart add request error:", error);
+
     return {
       kind: "error",
-      message: "We couldn't add any items to your cart. Please try again.",
+      message: ADD_TO_CART_ERROR_MESSAGE,
     };
   }
 }
@@ -141,7 +176,7 @@ export function ReorderButton({
     const result = await reorder(lineItems);
     if (result.kind === "ok") {
       setState({ status: "idle" });
-      window.location.assign("/cart");
+      window.location.assign(getCartUrl());
       return;
     }
     if (result.kind === "partial") {
@@ -170,7 +205,7 @@ export function ReorderButton({
       {state.status === "partial" ? (
         <p className={`${styles.notice} ${styles.skippedNotice}`} role="status">
           Some items were unable to be added to your cart.{" "}
-          <a href="/cart" className={styles.noticeLink}>
+          <a href={getCartUrl()} className={styles.noticeLink}>
             View cart
           </a>
         </p>
