@@ -1,0 +1,55 @@
+{% comment %}
+  Renders subscription purchase options for products with selling plans.
+  Accepts:
+  - product: {Object} product object.
+  - product_form_id: {String} product form id.
+{% endcomment %}
+
+{%- if product != blank and product.selling_plan_groups.size > 0 -%}
+  {%- assign first_subscription_plan_rendered = false -%}
+  <fieldset class="selling-plan-selector" data-selling-plan-selector>
+    <legend class="selling-plan-selector__legend">Purchase options</legend>
+
+    {%- unless product.requires_selling_plan -%}
+      <label class="selling-plan-selector__option">
+        <input
+          type="radio"
+          name="selling_plan"
+          value=""
+          form="{{ product_form_id }}"
+          checked
+        >
+        <span>
+          <strong>One-time purchase</strong>
+          <small>{{ product.selected_or_first_available_variant.price | money }}</small>
+        </span>
+      </label>
+    {%- endunless -%}
+
+    {%- for group in product.selling_plan_groups -%}
+      <div class="selling-plan-selector__group">
+        <p class="selling-plan-selector__group-name">{{ group.name }}</p>
+        {%- for selling_plan in group.selling_plans -%}
+          <label class="selling-plan-selector__option">
+            <input
+              type="radio"
+              name="selling_plan"
+              value="{{ selling_plan.id }}"
+              form="{{ product_form_id }}"
+              {% if product.requires_selling_plan and first_subscription_plan_rendered == false %}
+                checked
+              {% endif %}
+            >
+            {%- assign first_subscription_plan_rendered = true -%}
+            <span>
+              <strong>{{ selling_plan.name }}</strong>
+              {%- if selling_plan.description != blank -%}
+                <small>{{ selling_plan.description }}</small>
+              {%- endif -%}
+            </span>
+          </label>
+        {%- endfor -%}
+      </div>
+    {%- endfor -%}
+  </fieldset>
+{%- endif -%}
