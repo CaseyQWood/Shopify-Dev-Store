@@ -5,6 +5,7 @@ import path from "node:path";
 import { createRequestHandler } from "@react-router/express";
 
 import * as build from "./build/server/index.js";
+import { startSubscriptionWorker } from "./subscription-worker.mjs";
 
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST;
@@ -67,3 +68,5 @@ if (host) {
 } else {
   app.listen(port, onListen);
 }
+
+startSubscriptionWorker();

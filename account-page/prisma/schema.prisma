@@ -32,3 +32,37 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model SubscriptionRenewalRun {
+  id             String    @id @default(cuid())
+  shop           String
+  idempotencyKey String    @unique
+  windowStart    DateTime
+  windowEnd      DateTime
+  status         String    @default("PENDING")
+  jobId          String?
+  errorMessage   String?
+  resultSummary  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([shop, windowStart, windowEnd])
+  @@index([shop, status])
+  @@index([jobId])
+}
+
+model SubscriptionAdminActionAudit {
+  id          String   @id @default(cuid())
+  shop        String
+  adminEmail  String?
+  action      String
+  contractId  String?
+  targetId    String?
+  status      String
+  message     String?
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  @@index([shop, createdAt])
+  @@index([contractId])
+}
