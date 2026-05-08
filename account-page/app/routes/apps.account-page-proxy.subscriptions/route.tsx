@@ -53,6 +53,8 @@ export function ErrorBoundary() {
 export default function SubscriptionsTab() {
   const { subscriptions } = useLoaderData<typeof loader>();
 
+  console.log("test: ", subscriptions)
+
   return (
     <section aria-labelledby="subscriptions-heading">
       <h2 id="subscriptions-heading" className={styles.heading}>
@@ -77,8 +79,8 @@ export default function SubscriptionsTab() {
                 <p className={styles.cardMeta}>{sub.cadence}</p>
                 <p className={styles.cardMeta}>
                   Next charge:{" "}
-                  {sub.nextBillingDate
-                    ? formatDate(sub.nextBillingDate)
+                  {sub.displayNextBillingDate
+                    ? formatDate(sub.displayNextBillingDate)
                     : "Not scheduled"}
                 </p>
               </div>

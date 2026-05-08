@@ -185,6 +185,7 @@ export type SubscriptionContract = {
   numericId: string;
   status: string;
   nextBillingDate: string | null;
+  displayNextBillingDate: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   customer: {
@@ -578,6 +579,17 @@ function mapBillingCycle(node: BillingCycleNode): BillingCycle {
   };
 }
 
+function selectNextBillableCycleDate(
+  cycles: BillingCycleNode[],
+  fallbackDate: string | null,
+) {
+  const nextBillableCycle = cycles.find(
+    (cycle) => cycle.status === "UNBILLED" && cycle.skipped !== true,
+  );
+
+  return nextBillableCycle?.billingAttemptExpectedDate ?? fallbackDate;
+}
+
 function mapContract(
   node: SubscriptionContractNode,
   cycles: BillingCycleNode[] = [],
@@ -591,6 +603,10 @@ function mapContract(
     numericId: numericIdFromGid(node.id, "SubscriptionContract"),
     status: node.status ?? "UNKNOWN",
     nextBillingDate: node.nextBillingDate ?? null,
+    displayNextBillingDate: selectNextBillableCycleDate(
+      cycles,
+      node.nextBillingDate ?? null,
+    ),
     createdAt: node.createdAt ?? null,
     updatedAt: node.updatedAt ?? null,
     customer: {
@@ -661,6 +677,31 @@ function dedupeContracts(contracts: SubscriptionContract[]) {
   return Array.from(deduped.values());
 }
 
+async function enrichContractsWithDisplayNextBillingDate(
+  admin: AdminGraphqlClient,
+  contracts: SubscriptionContract[],
+) {
+  const nextBillableCycles = await Promise.all(
+    contracts.map(async (contract) => ({
+      contractId: contract.id,
+      cycle: await findNextBillingCycle(admin, contract.id),
+    })),
+  );
+
+  const nextBillableDateByContractId = new Map(
+    nextBillableCycles.map(({ contractId, cycle }) => [
+      contractId,
+      cycle?.billingAttemptExpectedDate ?? null,
+    ]),
+  );
+
+  return contracts.map((contract) => ({
+    ...contract,
+    displayNextBillingDate:
+      nextBillableDateByContractId.get(contract.id) ?? contract.nextBillingDate,
+  }));
+}
+
 function looksLikeSubscriptionContractId(value: string) {
   return (
     /^\d+$/.test(value) ||
@@ -718,9 +759,11 @@ export async function listRecentSubscriptionContracts(
     { first: CONTRACT_PAGE_SIZE },
   );
 
-  return (data.subscriptionContracts.nodes ?? []).map((node) =>
+  const contracts = (data.subscriptionContracts.nodes ?? []).map((node) =>
     mapContract(node),
   );
+
+  return enrichContractsWithDisplayNextBillingDate(admin, contracts);
 }
 
 export async function getSubscriptionContractDetail(
@@ -758,9 +801,11 @@ export async function getCustomerSubscriptionContracts(
     },
   );
 
-  return (data.customer?.subscriptionContracts?.nodes ?? []).map((node) =>
+  const contracts = (data.customer?.subscriptionContracts?.nodes ?? []).map((node) =>
     mapContract(node),
   );
+
+  return enrichContractsWithDisplayNextBillingDate(admin, contracts);
 }
 
 export async function searchSubscriptionContracts(
@@ -790,17 +835,17 @@ export async function searchSubscriptionContracts(
     },
   );
 
-  console.log("test1: ", customerSearch.customers.nodes);
-
   const customerContracts = (customerSearch.customers.nodes ?? []).flatMap(
     (customer) => customer.subscriptionContracts?.nodes ?? [],
   );
 
-  return dedupeContracts([
+  const contracts = dedupeContracts([
     ...(directContract ? [directContract] : []),
     ...directCustomerContracts,
     ...customerContracts.map((node) => mapContract(node)),
   ]);
+
+  return enrichContractsWithDisplayNextBillingDate(admin, contracts);
 }
 
 export async function findNextBillingCycle(

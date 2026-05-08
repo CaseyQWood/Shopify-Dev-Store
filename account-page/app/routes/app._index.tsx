@@ -114,7 +114,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const intent = formString(formData, "intent");
   const contractId = formString(formData, "contractId") || null;
-  let actionName = intent || "unknown";
+  const actionName = intent || "unknown";
 
   try {
     switch (intent) {
@@ -338,7 +338,7 @@ function SearchResults({
                 </span>
               </td>
               <td>{contract.cadence}</td>
-              <td>{formatDate(contract.nextBillingDate)}</td>
+              <td>{formatDate(contract.displayNextBillingDate)}</td>
               <td>{contract.lineSummary}</td>
             </tr>
           ))}
@@ -371,7 +371,7 @@ function ContractSummary({ contract }: { contract: SubscriptionContract }) {
       </div>
       <div>
         <span className={styles.label}>Next billing</span>
-        <strong>{formatDate(contract.nextBillingDate)}</strong>
+        <strong>{formatDate(contract.displayNextBillingDate)}</strong>
       </div>
       <div>
         <span className={styles.label}>Recent billing state</span>
