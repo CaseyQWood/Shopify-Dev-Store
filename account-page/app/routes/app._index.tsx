@@ -133,11 +133,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           message: "Next unbilled cycle was skipped.",
         } satisfies ActionResult;
 
-      case "change-next-date":
-        await shiftAllUpcomingCycles(
+      case "shift-all-by-day": {
+        const targetDay = formPositiveInteger(formData, "targetDay");
+        if (targetDay > 31) {
+          throw new Error("Target day must be between 1 and 31.");
+        }
+        const shiftResult = await shiftAllUpcomingCycles(
           admin,
           contractId ?? "",
-          formString(formData, "billingDate"),
+          targetDay,
         );
         await recordSubscriptionAdminAction(prisma, {
           shop,
@@ -145,12 +149,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           action: "SHIFT_ALL_CYCLES",
           contractId,
           status: "SUCCESS",
-          metadata: { billingDate: formString(formData, "billingDate") },
+          metadata: { targetDay },
         });
         return {
           status: "success",
-          message: "Shifted all upcoming cycles to the new schedule.",
+          message:
+            shiftResult.message ??
+            `Shifted ${shiftResult.shifted} upcoming cycle(s) to land on day ${targetDay} of the month.`,
         } satisfies ActionResult;
+      }
 
       case "change-cycle-date": {
         const cycleIndex = formPositiveInteger(formData, "cycleIndex");
@@ -425,16 +432,24 @@ function ScheduleActions({ contract }: { contract: SubscriptionContract }) {
       </Form>
 
       <Form method="post" className={styles.actionPanel}>
-        <input type="hidden" name="intent" value="change-next-date" />
+        <input type="hidden" name="intent" value="shift-all-by-day" />
         <input type="hidden" name="contractId" value={contract.id} />
         <h3>Shift all upcoming cycles</h3>
         <p>
-          Sets the next billing date and re-aligns every later unbilled cycle
-          at the contract's cadence ({contract.cadence}).
+          Pins every upcoming unbilled cycle to a specific day of the month,
+          re-aligned at the contract&apos;s cadence ({contract.cadence}).
+          Not supported for day-cadence contracts.
         </p>
         <label className={styles.field}>
-          <span>Next billing date</span>
-          <input type="datetime-local" name="billingDate" required />
+          <span>Target day of month (1–31)</span>
+          <input
+            type="number"
+            name="targetDay"
+            min={1}
+            max={31}
+            step={1}
+            required
+          />
         </label>
         <button type="submit" className={styles.button}>
           Shift schedule

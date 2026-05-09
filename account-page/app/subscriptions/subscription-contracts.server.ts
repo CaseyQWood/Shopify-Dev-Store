@@ -975,16 +975,125 @@ const CONTRACT_SHIFT_QUERY = `#graphql
   }
 ` as const;
 
+/** Return the number of days in a given UTC year/month (month is 1-based). */
+function daysInMonth(year: number, month: number): number {
+  // Day 0 of the next month is the last day of the current month.
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/**
+ * Given a Date and a target day-of-month (1–31), return a new Date with the
+ * day clamped to the month's actual last day.
+ */
+function clampDayToMonth(base: Date, targetDay: number): Date {
+  const year = base.getUTCFullYear();
+  const month = base.getUTCMonth() + 1; // 1-based
+  const maxDay = daysInMonth(year, month);
+  const day = Math.min(targetDay, maxDay);
+  return new Date(
+    Date.UTC(year, month - 1, day, base.getUTCHours(), base.getUTCMinutes(), base.getUTCSeconds()),
+  );
+}
+
+/**
+ * For MONTH cadence: find the first date >= `existingExpected` that lands on
+ * `targetDay` (clamped to its month), stepping by `intervalCount` months.
+ */
+function firstMonthlyOnOrAfter(
+  existingExpected: Date,
+  targetDay: number,
+  intervalCount: number,
+): Date {
+  let candidate = clampDayToMonth(existingExpected, targetDay);
+  // If the clamped day is before the expected date, advance by one interval.
+  if (candidate < existingExpected) {
+    const next = new Date(existingExpected.getTime());
+    next.setUTCMonth(next.getUTCMonth() + intervalCount);
+    candidate = clampDayToMonth(next, targetDay);
+  }
+  return candidate;
+}
+
+/**
+ * For WEEK cadence: find the first date >= `existingExpected` whose
+ * calendar day-of-month equals `targetDay` (or the last valid day of that
+ * month if targetDay exceeds month length).
+ */
+function firstWeeklyOnOrAfter(existingExpected: Date, targetDay: number): Date {
+  // Scan forward day-by-day until we find a date where clamped day === targetDay
+  // or the clamped day equals targetDay (handling short months).
+  let candidate = new Date(existingExpected.getTime());
+  // Safety cap: maximum scan of 31 days (a day-of-month must recur within a month).
+  for (let i = 0; i < 32; i++) {
+    const maxDay = daysInMonth(
+      candidate.getUTCFullYear(),
+      candidate.getUTCMonth() + 1,
+    );
+    const effectiveDay = Math.min(targetDay, maxDay);
+    if (candidate.getUTCDate() === effectiveDay) {
+      return candidate;
+    }
+    candidate = new Date(candidate.getTime());
+    candidate.setUTCDate(candidate.getUTCDate() + 1);
+  }
+  // Fallback: clamp to current month (should not reach here).
+  return clampDayToMonth(existingExpected, targetDay);
+}
+
+/**
+ * Compute the target date for the Nth upcoming cycle (0-based offset from
+ * cycle 0 anchor) given the billing interval.
+ *
+ * For MONTH: anchor + intervalCount*offset months, then re-clamp to targetDay.
+ * For WEEK: anchor + intervalCount*7*offset days (no day-of-month re-pinning).
+ * For YEAR: anchor + offset years, day-of-month pinned to targetDay each year.
+ * For DAY: returns the anchor unchanged (validation rejects DAY cadence earlier).
+ */
+function computeCycleDate(
+  anchor: Date,
+  offset: number,
+  interval: string,
+  intervalCount: number,
+  targetDay: number,
+): Date {
+  if (offset === 0) return anchor;
+
+  switch (interval.toUpperCase()) {
+    case "MONTH": {
+      const base = new Date(anchor.getTime());
+      base.setUTCMonth(base.getUTCMonth() + intervalCount * offset);
+      return clampDayToMonth(base, targetDay);
+    }
+    case "WEEK": {
+      const base = new Date(anchor.getTime());
+      base.setUTCDate(base.getUTCDate() + intervalCount * 7 * offset);
+      return base;
+    }
+    case "YEAR": {
+      const base = new Date(anchor.getTime());
+      base.setUTCFullYear(base.getUTCFullYear() + intervalCount * offset);
+      return clampDayToMonth(base, targetDay);
+    }
+    case "DAY":
+    default:
+      return addInterval(anchor, interval, intervalCount * offset);
+  }
+}
+
 export async function shiftAllUpcomingCycles(
   admin: AdminGraphqlClient,
   contractId: string,
-  newNextBillingDate: string,
+  targetDay: number,
 ) {
-  const normalizedContractId = normalizeGid(contractId, "SubscriptionContract");
-  const anchorDate = new Date(newNextBillingDate);
-  if (Number.isNaN(anchorDate.getTime())) {
-    throw new Error("Enter a valid next billing date.");
+  if (
+    !Number.isInteger(targetDay) ||
+    targetDay < 1 ||
+    targetDay > 31
+  ) {
+    throw new Error("Target day of month must be a whole number between 1 and 31.");
   }
+
+  const normalizedContractId = normalizeGid(contractId, "SubscriptionContract");
 
   const data = await shopifyGraphql<{
     subscriptionContract: {
@@ -1003,23 +1112,47 @@ export async function shiftAllUpcomingCycles(
     );
   }
 
+  const interval = policy.interval.toUpperCase();
+
+  if (interval === "DAY") {
+    throw new Error(
+      "Day-cadence contracts bill every N days — a day-of-month target does not apply. Use the individual cycle editor instead.",
+    );
+  }
+
   const upcoming = (data.subscriptionBillingCycles.nodes ?? [])
     .filter((cycle) => cycle.status === "UNBILLED" && !cycle.skipped)
     .sort((a, b) => a.cycleIndex - b.cycleIndex);
 
   if (upcoming.length === 0) {
-    throw new Error("No upcoming unbilled cycles to shift.");
+    return { shifted: 0, message: "No upcoming unbilled cycles to shift." };
   }
 
   const intervalCount = policy.intervalCount ?? 1;
+
+  // Compute the anchor date for cycle 0 of the upcoming set.
+  const existingExpected = new Date(upcoming[0].billingAttemptExpectedDate);
+  let anchor: Date;
+  if (interval === "MONTH") {
+    anchor = firstMonthlyOnOrAfter(existingExpected, targetDay, intervalCount);
+  } else if (interval === "WEEK") {
+    anchor = firstWeeklyOnOrAfter(existingExpected, targetDay);
+  } else {
+    // YEAR: clamp targetDay to the existing expected month; if before, advance by intervalCount years.
+    let yearAnchor = clampDayToMonth(existingExpected, targetDay);
+    if (yearAnchor < existingExpected) {
+      const next = new Date(existingExpected.getTime());
+      next.setUTCFullYear(next.getUTCFullYear() + intervalCount);
+      yearAnchor = clampDayToMonth(next, targetDay);
+    }
+    anchor = yearAnchor;
+  }
+
   const anchorIndex = upcoming[0].cycleIndex;
 
   for (const cycle of upcoming) {
     const offset = cycle.cycleIndex - anchorIndex;
-    const target =
-      offset === 0
-        ? anchorDate
-        : addInterval(anchorDate, policy.interval, intervalCount * offset);
+    const target = computeCycleDate(anchor, offset, interval, intervalCount, targetDay);
 
     const result = await shopifyGraphql<ScheduleEditData>(
       admin,
@@ -1036,6 +1169,8 @@ export async function shiftAllUpcomingCycles(
 
     throwUserErrors(result.subscriptionBillingCycleScheduleEdit.userErrors);
   }
+
+  return { shifted: upcoming.length, message: null };
 }
 
 export async function updateRecurringLine(
