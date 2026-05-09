@@ -380,7 +380,7 @@ function SearchResults({
   );
 }
 
-function ContractSummary({ contract }: { contract: SubscriptionContract }) {
+function ContractSummary({ contract, actionData }: { contract: SubscriptionContract, actionData: { status: "success" | "error"; message: string } | undefined; }) {
   return (
     <div className={styles.summaryGrid}>
       <div>
@@ -412,6 +412,12 @@ function ContractSummary({ contract }: { contract: SubscriptionContract }) {
           <span>{contract.lastBillingAttemptErrorType}</span>
         ) : null}
       </div>
+
+      <EditProductsModal
+        contract={contract}
+        actionData={actionData ?? undefined}
+      />
+
     </div>
   );
 }
@@ -969,12 +975,12 @@ export default function SubscriptionAdminConsole() {
       <s-section heading="Contract detail">
         {selectedContract ? (
           <div className={styles.stack}>
-            <ContractSummary contract={selectedContract} />
+            <ContractSummary contract={selectedContract} actionData={actionData ?? undefined} />
             <ScheduleActions contract={selectedContract} />
-            <EditProductsModal
+            {/* <EditProductsModal
               contract={selectedContract}
               actionData={actionData ?? undefined}
-            />
+            /> */}
             <BillingCycles contract={selectedContract} />
           </div>
         ) : (
@@ -984,11 +990,14 @@ export default function SubscriptionAdminConsole() {
         )}
       </s-section>
 
-      {isSubmitting ? (
+
+      {
+      // TODO: remove this box and implement a true submitting managment system( probably just control buttons being disabled)
+      /* {isSubmitting ? (
         <s-section slot="aside" heading="Status">
           <div className={styles.muted}>Submitting Shopify admin action...</div>
         </s-section>
-      ) : null}
+      ) : null} */}
     </s-page>
   );
 }
