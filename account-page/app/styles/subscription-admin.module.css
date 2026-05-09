@@ -259,11 +259,26 @@
   display: grid;
   gap: 12px;
   padding: 18px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 1rem;
 }
 
 .modalForm h3 {
   margin: 0;
   font-size: 1rem;
+}
+
+.modalForm .field span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #4f5661;
+}
+
+.modalForm input,
+.modalForm textarea {
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 400;
 }
 
 .modalActions {
