@@ -18,6 +18,11 @@ import {
   formatShopifyError,
 } from "../subscriptions/shopify-graphql.server";
 import { recordSubscriptionAdminAction } from "../subscriptions/subscription-contracts.server";
+import {
+  listPendingSnapshots,
+  restoreFromSnapshot,
+} from "../subscriptions/subscription-snapshots.server";
+import type { SnapshotView } from "../subscriptions/subscription-snapshots.server";
 import styles from "../styles/subscription-admin.module.css";
 
 const REQUIRED_SUBSCRIPTION_SCOPES = [
@@ -65,7 +70,8 @@ function formatDateTime(iso: string | null) {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const { shop } = session as SessionWithAdminEmail;
 
   let sellingPlanGroup: Awaited<
     ReturnType<typeof getSubscriptionSellingPlanGroup>
@@ -83,11 +89,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     take: 5,
   });
 
+  const pendingSnapshots = await listPendingSnapshots(prisma, shop);
+
   return {
     sellingPlanGroup,
     sellingPlanError,
     requiredScopes: REQUIRED_SUBSCRIPTION_SCOPES,
     workerEnabled: process.env.SUBSCRIPTION_WORKER_ENABLED === "true",
+    snapshotsEnabled: process.env.SUBSCRIPTION_SNAPSHOTS_ENABLED === "true",
     recentRenewalRuns: recentRenewalRuns.map((run) => ({
       id: run.id,
       status: run.status,
@@ -97,6 +106,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       errorMessage: run.errorMessage,
       createdAt: run.createdAt.toISOString(),
     })),
+    pendingSnapshots,
   };
 };
 
@@ -129,6 +139,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         } satisfies ActionResult;
       }
 
+      case "restore-snapshot": {
+        const snapshotId = formString(formData, "snapshotId");
+        if (!snapshotId) throw new Error("Missing snapshotId.");
+        const result = await restoreFromSnapshot(prisma, shop, snapshotId, email);
+        return {
+          status: "success",
+          message: result.message,
+        } satisfies ActionResult;
+      }
+
       default:
         throw new Error("Unknown subscription admin action.");
     }
@@ -137,7 +157,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await recordSubscriptionAdminAction(prisma, {
       shop,
       adminEmail: email,
-      action: "SETUP_SELLING_PLANS",
+      action: intent === "restore-snapshot" ? "snapshot.restored" : "SETUP_SELLING_PLANS",
       status: "ERROR",
       message,
     });
@@ -332,6 +352,91 @@ function RenewalRuns({
   );
 }
 
+function SnapshotReconcile({
+  snapshots,
+  snapshotsEnabled,
+}: {
+  snapshots: SnapshotView[];
+  snapshotsEnabled: boolean;
+}) {
+  return (
+    <s-section heading="Pending snapshots to reconcile">
+      <div className={styles.setupStatus}>
+        <span className={snapshotsEnabled ? styles.badgeSuccess : styles.badge}>
+          {snapshotsEnabled ? "Snapshots enabled" : "Snapshots disabled"}
+        </span>
+        <span>Set SUBSCRIPTION_SNAPSHOTS_ENABLED=true to enable periodic snapshots.</span>
+      </div>
+      {snapshots.length === 0 ? (
+        <div className={styles.emptyState}>
+          No pending snapshots to reconcile.
+        </div>
+      ) : (
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">Contract</th>
+                <th scope="col">Customer</th>
+                <th scope="col">Snapshot taken</th>
+                <th scope="col">Status</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snapshots.map((snap) => (
+                <tr key={snap.id}>
+                  <td>
+                    <span className={styles.idLink}>
+                      {snap.contractId.replace(
+                        "gid://shopify/SubscriptionContract/",
+                        "#",
+                      )}
+                    </span>
+                    {snap.contractSummary.lineSummary ? (
+                      <div className={styles.muted} style={{ fontSize: "0.82rem" }}>
+                        {snap.contractSummary.lineSummary}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td>
+                    <div className={styles.customerCell}>
+                      <span>
+                        {snap.contractSummary.customerDisplayName ?? "Unknown"}
+                      </span>
+                    </div>
+                  </td>
+                  <td>{formatDateTime(snap.snapshotAt)}</td>
+                  <td>
+                    <span
+                      className={
+                        snap.contractSummary.status === "ACTIVE"
+                          ? styles.badgeSuccess
+                          : styles.badge
+                      }
+                    >
+                      {snap.contractSummary.status ?? "Unknown"}
+                    </span>
+                  </td>
+                  <td>
+                    <Form method="post">
+                      <input type="hidden" name="intent" value="restore-snapshot" />
+                      <input type="hidden" name="snapshotId" value={snap.id} />
+                      <button type="submit" className={styles.button}>
+                        Reconcile
+                      </button>
+                    </Form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </s-section>
+  );
+}
+
 export default function SubscriptionConfigPage() {
   const {
     sellingPlanError,
@@ -339,6 +444,8 @@ export default function SubscriptionConfigPage() {
     requiredScopes,
     recentRenewalRuns,
     workerEnabled,
+    snapshotsEnabled,
+    pendingSnapshots,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const shopify = useAppBridge();
@@ -367,6 +474,7 @@ export default function SubscriptionConfigPage() {
 
       <SellingPlanSetup group={sellingPlanGroup} error={sellingPlanError} />
       <RenewalRuns runs={recentRenewalRuns} workerEnabled={workerEnabled} />
+      <SnapshotReconcile snapshots={pendingSnapshots} snapshotsEnabled={snapshotsEnabled} />
 
       <s-section slot="aside" heading="Access requirements">
         <div className={styles.stack}>

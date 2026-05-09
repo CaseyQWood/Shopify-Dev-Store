@@ -66,3 +66,21 @@ model SubscriptionAdminActionAudit {
   @@index([shop, createdAt])
   @@index([contractId])
 }
+
+model SubscriptionSnapshot {
+  id              String    @id @default(cuid())
+  shop            String
+  contractId      String
+  customerId      String?
+  snapshotAt      DateTime
+  contractData    String
+  billingCycles   String
+  billingMetadata String
+  isRestored      Boolean   @default(false)
+  restoredAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@unique([shop, contractId, snapshotAt])
+  @@index([shop, isRestored])
+  @@index([shop, createdAt])
+}

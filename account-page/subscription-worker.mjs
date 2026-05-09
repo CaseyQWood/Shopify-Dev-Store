@@ -8,6 +8,290 @@ const DEFAULT_LOOKBACK_HOURS = 24;
 const DEFAULT_LEAD_HOURS = 24;
 const RUNNING_LOCK_MS = 2 * 60 * 60 * 1000;
 
+// ---------------------------------------------------------------------------
+// Snapshot pass
+// ---------------------------------------------------------------------------
+
+const SNAPSHOT_DEFAULT_INTERVAL_HOURS = 24;
+const SNAPSHOT_DEFAULT_RETENTION_DAYS = 90;
+
+const ACTIVE_CONTRACTS_QUERY = `#graphql
+  query ActiveSubscriptionContracts($first: Int!, $after: String) {
+    subscriptionContracts(first: $first, after: $after, query: "status:ACTIVE") {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        id
+        customer {
+          id
+        }
+      }
+    }
+  }
+`;
+
+const SNAPSHOT_CONTRACT_QUERY = `#graphql
+  query SnapshotContractDetail($id: ID!, $cycleStart: DateTime!, $cycleEnd: DateTime!) {
+    subscriptionContract(id: $id) {
+      id
+      status
+      nextBillingDate
+      createdAt
+      updatedAt
+      currencyCode
+      lastPaymentStatus
+      lastBillingAttemptErrorType
+      customer {
+        id
+        displayName
+        email
+        phone
+      }
+      billingPolicy {
+        interval
+        intervalCount
+      }
+      deliveryPolicy {
+        interval
+        intervalCount
+      }
+      lines(first: 25) {
+        nodes {
+          id
+          title
+          variantTitle
+          quantity
+          variantId
+          productId
+          currentPrice {
+            amount
+            currencyCode
+          }
+          lineDiscountedPrice {
+            amount
+            currencyCode
+          }
+        }
+      }
+      billingAttempts(first: 5, reverse: true) {
+        nodes {
+          id
+          ready
+          errorCode
+          errorMessage
+          order {
+            id
+            name
+          }
+          processingError {
+            code
+            message
+          }
+        }
+      }
+    }
+    subscriptionBillingCycles(
+      first: 6
+      contractId: $id
+      sortKey: CYCLE_INDEX
+      billingCyclesDateRangeSelector: {startDate: $cycleStart, endDate: $cycleEnd}
+    ) {
+      nodes {
+        cycleIndex
+        billingAttemptExpectedDate
+        cycleStartAt
+        cycleEndAt
+        status
+        skipped
+        edited
+      }
+    }
+  }
+`;
+
+function isSnapshotsEnabled() {
+  return process.env.SUBSCRIPTION_SNAPSHOTS_ENABLED === "true";
+}
+
+function snapshotIntervalHours() {
+  const v = Number(process.env.SUBSCRIPTION_SNAPSHOT_INTERVAL_HOURS);
+  return Number.isFinite(v) && v > 0 ? v : SNAPSHOT_DEFAULT_INTERVAL_HOURS;
+}
+
+function snapshotRetentionDays() {
+  const v = Number(process.env.SUBSCRIPTION_SNAPSHOT_RETENTION_DAYS);
+  return Number.isFinite(v) && v > 0 ? v : SNAPSHOT_DEFAULT_RETENTION_DAYS;
+}
+
+function snapshotDateRange() {
+  const now = new Date();
+  const end = new Date(now.getTime() + 730 * 24 * 60 * 60 * 1000);
+  return {
+    cycleStart: now.toISOString().replace("Z", "Z"),
+    cycleEnd: end.toISOString().replace("Z", "Z"),
+  };
+}
+
+async function captureSnapshotForContract(session, contractId) {
+  const snapshotAt = new Date();
+  snapshotAt.setUTCSeconds(0, 0);
+
+  const data = await adminGraphql(
+    session.shop,
+    session.accessToken,
+    SNAPSHOT_CONTRACT_QUERY,
+    { id: contractId, ...snapshotDateRange() },
+  );
+
+  const contract = data.subscriptionContract;
+  if (!contract) return null;
+
+  const customerId = contract.customer?.id ?? null;
+  const contractData = JSON.stringify(contract);
+  const billingCycles = JSON.stringify(
+    data.subscriptionBillingCycles?.nodes ?? [],
+  );
+  const billingMetadata = JSON.stringify({
+    lastPaymentStatus: contract.lastPaymentStatus ?? null,
+    lastBillingAttemptErrorType: contract.lastBillingAttemptErrorType ?? null,
+    billingPolicy: contract.billingPolicy ?? null,
+    deliveryPolicy: contract.deliveryPolicy ?? null,
+    capturedAt: snapshotAt.toISOString(),
+  });
+
+  try {
+    const row = await prisma.subscriptionSnapshot.create({
+      data: {
+        shop: session.shop,
+        contractId,
+        customerId,
+        snapshotAt,
+        contractData,
+        billingCycles,
+        billingMetadata,
+      },
+    });
+
+    await prisma.subscriptionAdminActionAudit.create({
+      data: {
+        shop: session.shop,
+        action: "snapshot.captured",
+        contractId,
+        targetId: row.id,
+        status: "SUCCESS",
+        message: `Worker snapshot ${row.id} captured.`,
+      },
+    });
+
+    return row.id;
+  } catch (err) {
+    // P2002 = unique constraint — snapshot already exists for this minute window
+    if (err && typeof err === "object" && err.code === "P2002") return null;
+    throw err;
+  }
+}
+
+async function shouldCaptureSnapshot(shop, contractId) {
+  const intervalHours = snapshotIntervalHours();
+  const cutoff = new Date(Date.now() - intervalHours * 60 * 60 * 1000);
+
+  const recent = await prisma.subscriptionSnapshot.findFirst({
+    where: {
+      shop,
+      contractId,
+      snapshotAt: { gte: cutoff },
+    },
+    orderBy: { snapshotAt: "desc" },
+  });
+
+  return !recent;
+}
+
+async function runSnapshotPass(session) {
+  if (!isSnapshotsEnabled()) return;
+
+  let after = null;
+  let capturedCount = 0;
+  let errorCount = 0;
+
+  do {
+    const data = await adminGraphql(
+      session.shop,
+      session.accessToken,
+      ACTIVE_CONTRACTS_QUERY,
+      { first: 50, after },
+    );
+
+    const connection = data.subscriptionContracts;
+    const nodes = connection?.nodes ?? [];
+
+    for (const node of nodes) {
+      if (!node.id) continue;
+
+      const needsSnapshot = await shouldCaptureSnapshot(session.shop, node.id);
+      if (!needsSnapshot) continue;
+
+      try {
+        await captureSnapshotForContract(session, node.id);
+        capturedCount++;
+      } catch (err) {
+        errorCount++;
+        console.error(
+          `[snapshot-worker] failed to snapshot contract ${node.id}:`,
+          err,
+        );
+      }
+    }
+
+    after = connection?.pageInfo?.hasNextPage
+      ? connection.pageInfo.endCursor
+      : null;
+  } while (after);
+
+  if (capturedCount > 0 || errorCount > 0) {
+    console.log(
+      `[snapshot-worker] ${session.shop}: captured=${capturedCount} errors=${errorCount}`,
+    );
+  }
+
+  await pruneOldSnapshotsForShop(session.shop);
+}
+
+async function pruneOldSnapshotsForShop(shop) {
+  const retentionDays = snapshotRetentionDays();
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+  const result = await prisma.subscriptionSnapshot.deleteMany({
+    where: {
+      shop,
+      isRestored: true,
+      createdAt: { lt: cutoff },
+    },
+  });
+
+  if (result.count > 0) {
+    await prisma.subscriptionAdminActionAudit.create({
+      data: {
+        shop,
+        action: "snapshot.pruned",
+        status: "SUCCESS",
+        message: `Pruned ${result.count} snapshot(s) older than ${retentionDays} days.`,
+        metadata: JSON.stringify({
+          count: result.count,
+          retentionDays,
+          cutoff: cutoff.toISOString(),
+        }),
+      },
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Renewal pass
+// ---------------------------------------------------------------------------
+
 const BULK_CHARGE_MUTATION = `#graphql
   mutation SubscriptionBillingCycleBulkCharge(
     $startDate: DateTime!
@@ -331,6 +615,7 @@ export async function runSubscriptionWorkerOnce() {
   for (const session of sessions) {
     await pollRunningRuns(session);
     await chargeRenewalWindow(session);
+    await runSnapshotPass(session);
   }
 }
 
