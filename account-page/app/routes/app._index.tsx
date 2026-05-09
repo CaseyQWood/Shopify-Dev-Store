@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   ActionFunctionArgs,
   HeadersFunction,
@@ -12,7 +12,7 @@ import {
   useNavigation,
   useRouteError,
 } from "react-router";
-import { useAppBridge } from "@shopify/app-bridge-react";
+import { Modal, TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import prisma from "../db.server";
@@ -20,12 +20,13 @@ import { authenticate } from "../shopify.server";
 import {
   addOneTimeLineToNextCycle,
   addRecurringLine,
-  changeNextBillingDate,
+  changeCycleBillingDate,
   getSubscriptionContractDetail,
   listRecentSubscriptionContracts,
   recordSubscriptionAdminAction,
   removeRecurringLine,
   searchSubscriptionContracts,
+  shiftAllUpcomingCycles,
   skipNextBillingCycle,
   updateRecurringLine,
   type SubscriptionContract,
@@ -133,7 +134,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         } satisfies ActionResult;
 
       case "change-next-date":
-        await changeNextBillingDate(
+        await shiftAllUpcomingCycles(
           admin,
           contractId ?? "",
           formString(formData, "billingDate"),
@@ -141,15 +142,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         await recordSubscriptionAdminAction(prisma, {
           shop,
           adminEmail: email,
-          action: "CHANGE_NEXT_BILLING_DATE",
+          action: "SHIFT_ALL_CYCLES",
           contractId,
           status: "SUCCESS",
           metadata: { billingDate: formString(formData, "billingDate") },
         });
         return {
           status: "success",
-          message: "Next billing date was changed.",
+          message: "Shifted all upcoming cycles to the new schedule.",
         } satisfies ActionResult;
+
+      case "change-cycle-date": {
+        const cycleIndex = formPositiveInteger(formData, "cycleIndex");
+        const billingDate = formString(formData, "billingDate");
+        await changeCycleBillingDate(
+          admin,
+          contractId ?? "",
+          cycleIndex,
+          billingDate,
+        );
+        await recordSubscriptionAdminAction(prisma, {
+          shop,
+          adminEmail: email,
+          action: "CHANGE_CYCLE_DATE",
+          contractId,
+          targetId: String(cycleIndex),
+          status: "SUCCESS",
+          metadata: { cycleIndex, billingDate },
+        });
+        return {
+          status: "success",
+          message: `Cycle #${cycleIndex} billing date updated.`,
+        } satisfies ActionResult;
+      }
 
       case "update-recurring-line":
         await updateRecurringLine(admin, {
@@ -384,12 +409,12 @@ function ContractSummary({ contract }: { contract: SubscriptionContract }) {
   );
 }
 
-function ScheduleActions({ contractId }: { contractId: string }) {
+function ScheduleActions({ contract }: { contract: SubscriptionContract }) {
   return (
     <div className={styles.actionGrid}>
       <Form method="post" className={styles.actionPanel}>
         <input type="hidden" name="intent" value="skip-next-cycle" />
-        <input type="hidden" name="contractId" value={contractId} />
+        <input type="hidden" name="contractId" value={contract.id} />
         <h3>Skip next cycle</h3>
         <p>
           Applies a merchant-initiated skip to the next unbilled billing cycle.
@@ -401,14 +426,18 @@ function ScheduleActions({ contractId }: { contractId: string }) {
 
       <Form method="post" className={styles.actionPanel}>
         <input type="hidden" name="intent" value="change-next-date" />
-        <input type="hidden" name="contractId" value={contractId} />
-        <h3>Change next date</h3>
+        <input type="hidden" name="contractId" value={contract.id} />
+        <h3>Shift all upcoming cycles</h3>
+        <p>
+          Sets the next billing date and re-aligns every later unbilled cycle
+          at the contract's cadence ({contract.cadence}).
+        </p>
         <label className={styles.field}>
           <span>Next billing date</span>
           <input type="datetime-local" name="billingDate" required />
         </label>
         <button type="submit" className={styles.button}>
-          Change date
+          Shift schedule
         </button>
       </Form>
     </div>
@@ -542,10 +571,35 @@ function OneTimeAddOnForm({ contractId }: { contractId: string }) {
   );
 }
 
+function toLocalInputValue(iso: string | null) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+const CYCLE_MODAL_ID = "cycle-date-modal";
+
 function BillingCycles({ contract }: { contract: SubscriptionContract }) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
+
   if (contract.upcomingBillingCycles.length === 0) {
     return <div className={styles.emptyState}>No upcoming cycles returned.</div>;
   }
+
+  const openCycle =
+    openIndex !== null
+      ? contract.upcomingBillingCycles.find((c) => c.cycleIndex === openIndex)
+      : null;
+
+  const handleSave = () => {
+    formRef.current?.requestSubmit();
+    setOpenIndex(null);
+  };
 
   return (
     <div className={styles.tableWrap}>
@@ -556,24 +610,90 @@ function BillingCycles({ contract }: { contract: SubscriptionContract }) {
             <th scope="col">Expected billing</th>
             <th scope="col">Status</th>
             <th scope="col">Recent attempt</th>
+            <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {contract.upcomingBillingCycles.map((cycle) => (
-            <tr key={cycle.cycleIndex}>
-              <td>#{cycle.cycleIndex}</td>
-              <td>{formatDateTime(cycle.billingAttemptExpectedDate)}</td>
-              <td>
-                <span className={styles.badge}>
-                  {cycle.skipped ? "SKIPPED" : cycle.status}
-                  {cycle.edited ? " · EDITED" : ""}
-                </span>
-              </td>
-              <td>{cycle.billingAttempts[0]?.status ?? "No attempt"}</td>
-            </tr>
-          ))}
+          {contract.upcomingBillingCycles.map((cycle) => {
+            const editable = cycle.status === "UNBILLED" && !cycle.skipped;
+            return (
+              <tr key={cycle.cycleIndex}>
+                <td>#{cycle.cycleIndex}</td>
+                <td>{formatDateTime(cycle.billingAttemptExpectedDate)}</td>
+                <td>
+                  <span className={styles.badge}>
+                    {cycle.skipped ? "SKIPPED" : cycle.status}
+                    {cycle.edited ? " · EDITED" : ""}
+                  </span>
+                </td>
+                <td>{cycle.billingAttempts[0]?.status ?? "No attempt"}</td>
+                <td>
+                  <button
+                    type="button"
+                    className={styles.button}
+                    disabled={!editable}
+                    onClick={() => setOpenIndex(cycle.cycleIndex)}
+                  >
+                    Edit date
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+
+      <Modal
+        id={CYCLE_MODAL_ID}
+        open={openCycle !== null && openCycle !== undefined}
+        onHide={() => setOpenIndex(null)}
+      >
+        {openCycle ? (
+          <Form
+            ref={formRef}
+            method="post"
+            className={styles.modalForm}
+            onSubmit={() => setOpenIndex(null)}
+          >
+            <input type="hidden" name="intent" value="change-cycle-date" />
+            <input type="hidden" name="contractId" value={contract.id} />
+            <input
+              type="hidden"
+              name="cycleIndex"
+              value={openCycle.cycleIndex}
+            />
+            <p className={styles.muted}>
+              Window: {formatDateTime(openCycle.cycleStartAt)} –{" "}
+              {formatDateTime(openCycle.cycleEndAt)}
+            </p>
+            <label className={styles.field}>
+              <span>Billing date</span>
+              <input
+                type="datetime-local"
+                name="billingDate"
+                required
+                defaultValue={toLocalInputValue(
+                  openCycle.billingAttemptExpectedDate,
+                )}
+                min={toLocalInputValue(openCycle.cycleStartAt) || undefined}
+                max={toLocalInputValue(openCycle.cycleEndAt) || undefined}
+              />
+            </label>
+          </Form>
+        ) : null}
+        <TitleBar
+          title={
+            openCycle
+              ? `Edit billing date — cycle #${openCycle.cycleIndex}`
+              : "Edit billing date"
+          }
+        >
+          <button onClick={() => setOpenIndex(null)}>Cancel</button>
+          <button variant="primary" onClick={handleSave}>
+            Save date
+          </button>
+        </TitleBar>
+      </Modal>
     </div>
   );
 }
@@ -643,7 +763,7 @@ export default function SubscriptionAdminConsole() {
         {selectedContract ? (
           <div className={styles.stack}>
             <ContractSummary contract={selectedContract} />
-            <ScheduleActions contractId={selectedContract.id} />
+            <ScheduleActions contract={selectedContract} />
             <LineEditor contract={selectedContract} />
             <OneTimeAddOnForm contractId={selectedContract.id} />
             <BillingCycles contract={selectedContract} />

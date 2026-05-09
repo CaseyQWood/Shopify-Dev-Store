@@ -59,6 +59,8 @@ type BillingAttemptNode = {
 type BillingCycleNode = {
   cycleIndex: number;
   billingAttemptExpectedDate: string;
+  cycleStartAt?: string | null;
+  cycleEndAt?: string | null;
   status?: string | null;
   skipped?: boolean | null;
   edited?: boolean | null;
@@ -174,6 +176,8 @@ export type BillingAttempt = {
 export type BillingCycle = {
   cycleIndex: number;
   billingAttemptExpectedDate: string;
+  cycleStartAt: string | null;
+  cycleEndAt: string | null;
   status: string;
   skipped: boolean;
   edited: boolean;
@@ -318,6 +322,8 @@ const CONTRACT_DETAIL_QUERY = `#graphql
       nodes {
         cycleIndex
         billingAttemptExpectedDate
+        cycleStartAt
+        cycleEndAt
         status
         skipped
         edited
@@ -572,6 +578,8 @@ function mapBillingCycle(node: BillingCycleNode): BillingCycle {
   return {
     cycleIndex: node.cycleIndex,
     billingAttemptExpectedDate: node.billingAttemptExpectedDate,
+    cycleStartAt: node.cycleStartAt ?? null,
+    cycleEndAt: node.cycleEndAt ?? null,
     status: node.status ?? "UNKNOWN",
     skipped: Boolean(node.skipped),
     edited: Boolean(node.edited),
@@ -888,20 +896,19 @@ export async function skipNextBillingCycle(
   return data.subscriptionBillingCycleScheduleEdit.billingCycle;
 }
 
-export async function changeNextBillingDate(
+export async function changeCycleBillingDate(
   admin: AdminGraphqlClient,
   contractId: string,
+  cycleIndex: number,
   billingDate: string,
 ) {
   const normalizedContractId = normalizeGid(contractId, "SubscriptionContract");
   const parsedDate = new Date(billingDate);
   if (Number.isNaN(parsedDate.getTime())) {
-    throw new Error("Enter a valid next billing date.");
+    throw new Error("Enter a valid billing date.");
   }
-
-  const cycle = await findNextBillingCycle(admin, normalizedContractId);
-  if (!cycle) {
-    throw new Error("No upcoming unbilled cycle was found for this contract.");
+  if (!Number.isInteger(cycleIndex) || cycleIndex < 1) {
+    throw new Error("Cycle index must be a positive integer.");
   }
 
   const data = await shopifyGraphql<ScheduleEditData>(
@@ -909,7 +916,7 @@ export async function changeNextBillingDate(
     SCHEDULE_EDIT_MUTATION,
     {
       contractId: normalizedContractId,
-      index: cycle.cycleIndex,
+      index: cycleIndex,
       input: {
         billingDate: parsedDate.toISOString(),
         reason: "MERCHANT_INITIATED",
@@ -919,6 +926,116 @@ export async function changeNextBillingDate(
 
   throwUserErrors(data.subscriptionBillingCycleScheduleEdit.userErrors);
   return data.subscriptionBillingCycleScheduleEdit.billingCycle;
+}
+
+function addInterval(date: Date, interval: string, count: number) {
+  const next = new Date(date.getTime());
+  const safeCount = Math.max(1, count);
+  switch (interval.toUpperCase()) {
+    case "DAY":
+      next.setUTCDate(next.getUTCDate() + safeCount);
+      break;
+    case "WEEK":
+      next.setUTCDate(next.getUTCDate() + safeCount * 7);
+      break;
+    case "MONTH":
+      next.setUTCMonth(next.getUTCMonth() + safeCount);
+      break;
+    case "YEAR":
+      next.setUTCFullYear(next.getUTCFullYear() + safeCount);
+      break;
+    default:
+      throw new Error(`Unsupported billing interval: ${interval}`);
+  }
+  return next;
+}
+
+const CONTRACT_SHIFT_QUERY = `#graphql
+  query ContractForShift($id: ID!, $cycleStart: DateTime!, $cycleEnd: DateTime!) {
+    subscriptionContract(id: $id) {
+      id
+      billingPolicy {
+        interval
+        intervalCount
+      }
+    }
+    subscriptionBillingCycles(
+      first: 50
+      contractId: $id
+      sortKey: CYCLE_INDEX
+      billingCyclesDateRangeSelector: {startDate: $cycleStart, endDate: $cycleEnd}
+    ) {
+      nodes {
+        cycleIndex
+        billingAttemptExpectedDate
+        status
+        skipped
+      }
+    }
+  }
+` as const;
+
+export async function shiftAllUpcomingCycles(
+  admin: AdminGraphqlClient,
+  contractId: string,
+  newNextBillingDate: string,
+) {
+  const normalizedContractId = normalizeGid(contractId, "SubscriptionContract");
+  const anchorDate = new Date(newNextBillingDate);
+  if (Number.isNaN(anchorDate.getTime())) {
+    throw new Error("Enter a valid next billing date.");
+  }
+
+  const data = await shopifyGraphql<{
+    subscriptionContract: {
+      billingPolicy?: SubscriptionPolicyNode | null;
+    } | null;
+    subscriptionBillingCycles: { nodes?: BillingCycleNode[] | null };
+  }>(admin, CONTRACT_SHIFT_QUERY, {
+    id: normalizedContractId,
+    ...dateRangeFromNow(NEXT_CYCLE_LOOKAHEAD_DAYS),
+  });
+
+  const policy = data.subscriptionContract?.billingPolicy;
+  if (!policy?.interval) {
+    throw new Error(
+      "Contract has no billing policy interval; cannot align cycles.",
+    );
+  }
+
+  const upcoming = (data.subscriptionBillingCycles.nodes ?? [])
+    .filter((cycle) => cycle.status === "UNBILLED" && !cycle.skipped)
+    .sort((a, b) => a.cycleIndex - b.cycleIndex);
+
+  if (upcoming.length === 0) {
+    throw new Error("No upcoming unbilled cycles to shift.");
+  }
+
+  const intervalCount = policy.intervalCount ?? 1;
+  const anchorIndex = upcoming[0].cycleIndex;
+
+  for (const cycle of upcoming) {
+    const offset = cycle.cycleIndex - anchorIndex;
+    const target =
+      offset === 0
+        ? anchorDate
+        : addInterval(anchorDate, policy.interval, intervalCount * offset);
+
+    const result = await shopifyGraphql<ScheduleEditData>(
+      admin,
+      SCHEDULE_EDIT_MUTATION,
+      {
+        contractId: normalizedContractId,
+        index: cycle.cycleIndex,
+        input: {
+          billingDate: target.toISOString(),
+          reason: "MERCHANT_INITIATED",
+        },
+      },
+    );
+
+    throwUserErrors(result.subscriptionBillingCycleScheduleEdit.userErrors);
+  }
 }
 
 export async function updateRecurringLine(

@@ -243,6 +243,40 @@
   margin: 12px 0;
 }
 
+.modal {
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  padding: 0;
+  width: min(420px, 92vw);
+  background: #ffffff;
+}
+
+.modal::backdrop {
+  background: rgba(33, 43, 54, 0.4);
+}
+
+.modalForm {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.modalForm h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .setupStatus {
   display: flex;
   align-items: center;
