@@ -444,130 +444,322 @@ function ScheduleActions({ contract }: { contract: SubscriptionContract }) {
   );
 }
 
-function LineEditor({ contract }: { contract: SubscriptionContract }) {
-  return (
-    <div className={styles.stack}>
-      {contract.lines.map((line) => (
-        <div key={line.id} className={styles.linePanel}>
-          <div className={styles.lineHeader}>
-            <div>
-              <h3>{line.title}</h3>
-              <p>
-                {line.variantTitle ?? "Default variant"} ·{" "}
-                {line.currentPrice ?? "No price"}
-              </p>
-            </div>
-            <span className={styles.badge}>Qty {line.quantity}</span>
-          </div>
+type PickedVariant = { id: string; title: string };
 
-          <Form method="post" className={styles.inlineGrid}>
-            <input type="hidden" name="intent" value="update-recurring-line" />
-            <input type="hidden" name="contractId" value={contract.id} />
-            <input type="hidden" name="lineId" value={line.id} />
-            <label className={styles.field}>
-              <span>Quantity</span>
-              <input
-                type="number"
-                name="quantity"
-                min="1"
-                defaultValue={line.quantity}
-                required
-              />
-            </label>
-            <label className={styles.field}>
-              <span>Variant ID</span>
-              <input
-                type="text"
-                name="productVariantId"
-                defaultValue={line.variantId ?? ""}
-                placeholder="gid://shopify/ProductVariant/..."
-              />
-            </label>
-            <label className={styles.field}>
-              <span>Price override</span>
-              <input
-                type="text"
-                name="currentPrice"
-                defaultValue={priceInputValue(line.currentPrice)}
-                inputMode="decimal"
-              />
-            </label>
-            <button type="submit" className={styles.button}>
-              Save
-            </button>
-          </Form>
+const EDIT_PRODUCTS_MODAL_ID = "edit-products-modal";
 
-          <Form method="post">
-            <input type="hidden" name="intent" value="remove-recurring-line" />
-            <input type="hidden" name="contractId" value={contract.id} />
-            <input type="hidden" name="lineId" value={line.id} />
-            <button type="submit" className={styles.dangerButton}>
-              Remove recurring line
-            </button>
-          </Form>
-        </div>
-      ))}
+function EditProductsModal({
+  contract,
+  actionData,
+}: {
+  contract: SubscriptionContract;
+  actionData: { status: "success" | "error"; message: string } | undefined;
+}) {
+  const shopify = useAppBridge();
+  const [open, setOpen] = useState(false);
 
-      <Form method="post" className={styles.actionPanel}>
-        <input type="hidden" name="intent" value="add-recurring-line" />
-        <input type="hidden" name="contractId" value={contract.id} />
-        <h3>Add recurring product</h3>
-        <div className={styles.inlineGrid}>
-          <label className={styles.field}>
-            <span>Variant ID</span>
-            <input
-              type="text"
-              name="productVariantId"
-              placeholder="gid://shopify/ProductVariant/..."
-              required
-            />
-          </label>
-          <label className={styles.field}>
-            <span>Quantity</span>
-            <input type="number" name="quantity" min="1" defaultValue="1" required />
-          </label>
-          <label className={styles.field}>
-            <span>Price</span>
-            <input type="text" name="currentPrice" inputMode="decimal" required />
-          </label>
-          <button type="submit" className={styles.button}>
-            Add recurring
-          </button>
-        </div>
-      </Form>
-    </div>
+  // Picker state for "add recurring"
+  const [recurringVariant, setRecurringVariant] =
+    useState<PickedVariant | null>(null);
+  const [recurringQty, setRecurringQty] = useState("1");
+  const [recurringPrice, setRecurringPrice] = useState("");
+
+  // Picker state for "add one-time"
+  const [oneTimeVariant, setOneTimeVariant] = useState<PickedVariant | null>(
+    null,
   );
-}
+  const [oneTimeQty, setOneTimeQty] = useState("1");
+  const [oneTimePrice, setOneTimePrice] = useState("");
 
-function OneTimeAddOnForm({ contractId }: { contractId: string }) {
+  // Track the last intent that succeeded so we can reset the right section
+  const prevActionRef = useRef<typeof actionData>(undefined);
+
+  useEffect(() => {
+    if (
+      actionData &&
+      actionData !== prevActionRef.current &&
+      actionData.status === "success" &&
+      open
+    ) {
+      // Reset add-recurring state
+      setRecurringVariant(null);
+      setRecurringQty("1");
+      setRecurringPrice("");
+      // Reset add-one-time state
+      setOneTimeVariant(null);
+      setOneTimeQty("1");
+      setOneTimePrice("");
+    }
+    prevActionRef.current = actionData;
+  }, [actionData, open]);
+
+  async function openRecurringPicker() {
+    const selection = await shopify.resourcePicker({
+      type: "variant",
+      multiple: false,
+      action: "select",
+    });
+    if (selection && selection.length > 0) {
+      const v = selection[0];
+      setRecurringVariant({ id: v.id, title: v.displayName ?? v.id });
+    }
+  }
+
+  async function openOneTimePicker() {
+    const selection = await shopify.resourcePicker({
+      type: "variant",
+      multiple: false,
+      action: "select",
+    });
+    if (selection && selection.length > 0) {
+      const v = selection[0];
+      setOneTimeVariant({ id: v.id, title: v.displayName ?? v.id });
+    }
+  }
+
   return (
-    <Form method="post" className={styles.actionPanel}>
-      <input type="hidden" name="intent" value="add-one-time-line" />
-      <input type="hidden" name="contractId" value={contractId} />
-      <h3>Add one-time product to next cycle</h3>
-      <div className={styles.inlineGrid}>
-        <label className={styles.field}>
-          <span>Variant ID</span>
-          <input
-            type="text"
-            name="productVariantId"
-            placeholder="gid://shopify/ProductVariant/..."
-            required
-          />
-        </label>
-        <label className={styles.field}>
-          <span>Quantity</span>
-          <input type="number" name="quantity" min="1" defaultValue="1" required />
-        </label>
-        <label className={styles.field}>
-          <span>Price</span>
-          <input type="text" name="currentPrice" inputMode="decimal" required />
-        </label>
-        <button type="submit" className={styles.button}>
-          Add to next cycle
-        </button>
-      </div>
-    </Form>
+    <>
+      <button
+        type="button"
+        className={styles.button}
+        onClick={() => setOpen(true)}
+      >
+        Edit products
+      </button>
+
+      <Modal
+        id={EDIT_PRODUCTS_MODAL_ID}
+        open={open}
+        onHide={() => setOpen(false)}
+      >
+        <div className={styles.modalForm}>
+          {/* ── Section 1: Existing lines ── */}
+          <h3>Existing lines</h3>
+          {contract.lines.length === 0 ? (
+            <div className={styles.emptyState}>No lines on this contract.</div>
+          ) : (
+            <div className={styles.stack}>
+              {contract.lines.map((line) => (
+                <div key={line.id} className={styles.linePanel}>
+                  <div className={styles.lineHeader}>
+                    <div>
+                      <h3>{line.title}</h3>
+                      <p>
+                        {line.variantTitle ?? "Default variant"} ·{" "}
+                        {line.currentPrice ?? "No price"}
+                      </p>
+                    </div>
+                    <span className={styles.badge}>Qty {line.quantity}</span>
+                  </div>
+
+                  <Form method="post" className={styles.inlineGrid}>
+                    <input
+                      type="hidden"
+                      name="intent"
+                      value="update-recurring-line"
+                    />
+                    <input
+                      type="hidden"
+                      name="contractId"
+                      value={contract.id}
+                    />
+                    <input type="hidden" name="lineId" value={line.id} />
+                    <label className={styles.field}>
+                      <span>Quantity</span>
+                      <input
+                        type="number"
+                        name="quantity"
+                        min="1"
+                        defaultValue={line.quantity}
+                        required
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Variant ID</span>
+                      <input
+                        type="text"
+                        name="productVariantId"
+                        defaultValue={line.variantId ?? ""}
+                        placeholder="gid://shopify/ProductVariant/..."
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Price override</span>
+                      <input
+                        type="text"
+                        name="currentPrice"
+                        defaultValue={priceInputValue(line.currentPrice)}
+                        inputMode="decimal"
+                      />
+                    </label>
+                    <button type="submit" className={styles.button}>
+                      Save
+                    </button>
+                  </Form>
+
+                  <Form method="post">
+                    <input
+                      type="hidden"
+                      name="intent"
+                      value="remove-recurring-line"
+                    />
+                    <input
+                      type="hidden"
+                      name="contractId"
+                      value={contract.id}
+                    />
+                    <input type="hidden" name="lineId" value={line.id} />
+                    <button type="submit" className={styles.dangerButton}>
+                      Remove recurring line
+                    </button>
+                  </Form>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Section 2: Add recurring product ── */}
+          <h3>Add recurring product</h3>
+          <Form method="post" className={styles.stack}>
+            <input type="hidden" name="intent" value="add-recurring-line" />
+            <input type="hidden" name="contractId" value={contract.id} />
+            <input
+              type="hidden"
+              name="productVariantId"
+              value={recurringVariant?.id ?? ""}
+            />
+            <div className={styles.pickerField}>
+              <span className={styles.pickerLabel}>Variant</span>
+              <button
+                type="button"
+                className={styles.pickerButton}
+                onClick={openRecurringPicker}
+              >
+                {recurringVariant ? "Change variant" : "Choose variant"}
+              </button>
+              {recurringVariant ? (
+                <div className={styles.chipList}>
+                  <span className={styles.chip}>
+                    {recurringVariant.title}
+                    <button
+                      type="button"
+                      className={styles.chipRemove}
+                      aria-label={`Remove ${recurringVariant.title}`}
+                      onClick={() => setRecurringVariant(null)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <div className={styles.inlineGrid}>
+              <label className={styles.field}>
+                <span>Quantity</span>
+                <input
+                  type="number"
+                  name="quantity"
+                  min="1"
+                  value={recurringQty}
+                  onChange={(e) => setRecurringQty(e.target.value)}
+                  required
+                />
+              </label>
+              <label className={styles.field}>
+                <span>Price</span>
+                <input
+                  type="text"
+                  name="currentPrice"
+                  inputMode="decimal"
+                  value={recurringPrice}
+                  onChange={(e) => setRecurringPrice(e.target.value)}
+                  required
+                />
+              </label>
+              <button
+                type="submit"
+                className={styles.button}
+                disabled={!recurringVariant}
+              >
+                Add recurring
+              </button>
+            </div>
+          </Form>
+
+          {/* ── Section 3: Add one-time add-on ── */}
+          <h3>Add one-time product to next cycle</h3>
+          <Form method="post" className={styles.stack}>
+            <input type="hidden" name="intent" value="add-one-time-line" />
+            <input type="hidden" name="contractId" value={contract.id} />
+            <input
+              type="hidden"
+              name="productVariantId"
+              value={oneTimeVariant?.id ?? ""}
+            />
+            <div className={styles.pickerField}>
+              <span className={styles.pickerLabel}>Variant</span>
+              <button
+                type="button"
+                className={styles.pickerButton}
+                onClick={openOneTimePicker}
+              >
+                {oneTimeVariant ? "Change variant" : "Choose variant"}
+              </button>
+              {oneTimeVariant ? (
+                <div className={styles.chipList}>
+                  <span className={styles.chip}>
+                    {oneTimeVariant.title}
+                    <button
+                      type="button"
+                      className={styles.chipRemove}
+                      aria-label={`Remove ${oneTimeVariant.title}`}
+                      onClick={() => setOneTimeVariant(null)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <div className={styles.inlineGrid}>
+              <label className={styles.field}>
+                <span>Quantity</span>
+                <input
+                  type="number"
+                  name="quantity"
+                  min="1"
+                  value={oneTimeQty}
+                  onChange={(e) => setOneTimeQty(e.target.value)}
+                  required
+                />
+              </label>
+              <label className={styles.field}>
+                <span>Price</span>
+                <input
+                  type="text"
+                  name="currentPrice"
+                  inputMode="decimal"
+                  value={oneTimePrice}
+                  onChange={(e) => setOneTimePrice(e.target.value)}
+                  required
+                />
+              </label>
+              <button
+                type="submit"
+                className={styles.button}
+                disabled={!oneTimeVariant}
+              >
+                Add to next cycle
+              </button>
+            </div>
+          </Form>
+        </div>
+
+        <TitleBar title="Edit products">
+          <button onClick={() => setOpen(false)}>Done</button>
+        </TitleBar>
+      </Modal>
+    </>
   );
 }
 
@@ -764,8 +956,10 @@ export default function SubscriptionAdminConsole() {
           <div className={styles.stack}>
             <ContractSummary contract={selectedContract} />
             <ScheduleActions contract={selectedContract} />
-            <LineEditor contract={selectedContract} />
-            <OneTimeAddOnForm contractId={selectedContract.id} />
+            <EditProductsModal
+              contract={selectedContract}
+              actionData={actionData ?? undefined}
+            />
             <BillingCycles contract={selectedContract} />
           </div>
         ) : (
