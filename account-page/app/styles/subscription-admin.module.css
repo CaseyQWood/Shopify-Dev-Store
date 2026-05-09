@@ -300,6 +300,78 @@
   margin-bottom: 12px;
 }
 
+/* Resource picker field */
+.pickerField {
+  display: grid;
+  gap: 6px;
+}
+
+.pickerLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #4f5661;
+}
+
+.pickerButton {
+  justify-self: start;
+  min-height: 36px;
+  border: 1px solid #c9cccf;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: #f6f6f7;
+  color: #202223;
+  cursor: pointer;
+}
+
+.pickerButton:hover {
+  background: #ebebeb;
+  border-color: #adb0b3;
+}
+
+/* Selected items chip list */
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e4f5ea;
+  color: #17613a;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid #a9d7b8;
+}
+
+.chipRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #17613a;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.chipRemove:hover {
+  background: #a9d7b8;
+}
+
 .scopeList {
   margin: 0;
   padding-left: 18px;
