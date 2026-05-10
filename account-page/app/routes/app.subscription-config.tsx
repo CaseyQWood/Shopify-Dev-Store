@@ -438,7 +438,6 @@ function SellingPlanSetup({
   selectedGroup: SellingPlanGroupDetail | null;
   error: string | null;
 }) {
-  const shopify = useAppBridge();
 
   return (
     <s-section heading="Subscription purchase options">
@@ -594,7 +593,6 @@ export default function SubscriptionConfigPage() {
     sellingPlanError,
     groups,
     selectedGroup,
-    requiredScopes,
     recentRenewalRuns,
     workerEnabled,
     snapshotsEnabled,
@@ -628,21 +626,6 @@ export default function SubscriptionConfigPage() {
       <SellingPlanSetup groups={groups} selectedGroup={selectedGroup} error={sellingPlanError} />
       <RenewalRuns runs={recentRenewalRuns} workerEnabled={workerEnabled} />
       <SnapshotReconcile snapshots={pendingSnapshots} snapshotsEnabled={snapshotsEnabled} />
-
-      {/* <s-section slot="aside" heading="Access requirements">
-        <div className={styles.stack}>
-          <p className={styles.muted}>
-            Shopify remains the subscription source of truth. Checkout creates
-            subscription contracts; this console edits contracts and billing cycles
-            through Admin GraphQL.
-          </p>
-          <ul className={styles.scopeList}>
-            {requiredScopes.map((scope) => (
-              <li key={scope}>{scope}</li>
-            ))}
-          </ul>
-        </div>
-      </s-section> */}
     </s-page>
   );
 }
