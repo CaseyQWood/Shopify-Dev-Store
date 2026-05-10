@@ -377,6 +377,30 @@
   padding-left: 18px;
 }
 
+/* Group picker affordance */
+.groupPickerRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+/* Plans section container */
+.plansTable {
+  display: grid;
+  gap: 12px;
+}
+
+/* Product card: image left, title+price middle, remove button right */
+.productCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #dfe3e8;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
 @media (max-width: 720px) {
   .searchForm {
     align-items: stretch;
@@ -386,5 +410,9 @@
   .button,
   .dangerButton {
     width: 100%;
+  }
+
+  .groupPickerRow {
+    flex-direction: column;
   }
 }

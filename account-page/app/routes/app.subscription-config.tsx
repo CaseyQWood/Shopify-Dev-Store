@@ -4,15 +4,24 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { Form, useActionData, useLoaderData, useRouteError } from "react-router";
+import { Form, redirect, useActionData, useLoaderData, useNavigate, useRouteError } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import {
-  getSubscriptionSellingPlanGroup,
-  setupSubscriptionSellingPlans,
+  listSellingPlanGroups,
+  getSellingPlanGroupDetail,
+  createSellingPlanGroup,
+  updateSellingPlanGroupBasics,
+  updateSellingPlanGroupPlans,
+  addProductsToGroup,
+  removeProductsFromGroup,
+} from "../subscriptions/selling-plans.server";
+import type {
+  SellingPlanGroupSummary,
+  SellingPlanGroupDetail,
 } from "../subscriptions/selling-plans.server";
 import {
   formatShopifyError,
@@ -23,6 +32,9 @@ import {
   restoreFromSnapshot,
 } from "../subscriptions/subscription-snapshots.server";
 import type { SnapshotView } from "../subscriptions/subscription-snapshots.server";
+import { GroupBasicsForm } from "../components/GroupBasicsForm";
+import { PlansTable } from "../components/PlansTable";
+import { ProductCardList } from "../components/ProductCardList";
 import styles from "../styles/subscription-admin.module.css";
 
 const REQUIRED_SUBSCRIPTION_SCOPES = [
@@ -73,13 +85,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const { shop } = session as SessionWithAdminEmail;
 
-  let sellingPlanGroup: Awaited<
-    ReturnType<typeof getSubscriptionSellingPlanGroup>
-  > = null;
+  const url = new URL(request.url);
+  const groupId = url.searchParams.get("groupId");
+
+  let groups: SellingPlanGroupSummary[] = [];
+  let selectedGroup: SellingPlanGroupDetail | null = null;
   let sellingPlanError: string | null = null;
 
   try {
-    sellingPlanGroup = await getSubscriptionSellingPlanGroup(admin);
+    groups = await listSellingPlanGroups(admin);
+    if (groupId) {
+      selectedGroup = await getSellingPlanGroupDetail(admin, groupId);
+    }
   } catch (error) {
     sellingPlanError = formatShopifyError(error);
   }
@@ -92,7 +109,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const pendingSnapshots = await listPendingSnapshots(prisma, shop);
 
   return {
-    sellingPlanGroup,
+    groups,
+    selectedGroup,
     sellingPlanError,
     requiredScopes: REQUIRED_SUBSCRIPTION_SCOPES,
     workerEnabled: process.env.SUBSCRIPTION_WORKER_ENABLED === "true",
@@ -118,25 +136,172 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     switch (intent) {
-      case "setup-selling-plans": {
-        const result = await setupSubscriptionSellingPlans(admin, {
-          productIdsInput: formString(formData, "productIdsInput"),
-          productVariantIdsInput: formString(formData, "productVariantIdsInput"),
+      case "create-group": {
+        const name = formString(formData, "name");
+        if (!name) {
+          return { status: "error", message: "Missing required field: name." } satisfies ActionResult;
+        }
+        const description = formString(formData, "description") || undefined;
+        const newGroupId = await createSellingPlanGroup(admin, { name, description });
+        await recordSubscriptionAdminAction(prisma, {
+          shop,
+          adminEmail: email,
+          action: "CREATE_SELLING_PLAN_GROUP",
+          targetId: newGroupId,
+          status: "SUCCESS",
+          metadata: { name },
+        });
+        return redirect(`?groupId=${encodeURIComponent(newGroupId)}`);
+      }
+
+      case "update-group-basics": {
+        const groupId = formString(formData, "groupId");
+        const name = formString(formData, "name");
+        if (!groupId) {
+          return { status: "error", message: "Missing required field: groupId." } satisfies ActionResult;
+        }
+        if (!name) {
+          return { status: "error", message: "Missing required field: name." } satisfies ActionResult;
+        }
+        const description = formString(formData, "description") || undefined;
+        await updateSellingPlanGroupBasics(admin, groupId, { name, description });
+        await recordSubscriptionAdminAction(prisma, {
+          shop,
+          adminEmail: email,
+          action: "UPDATE_SELLING_PLAN_GROUP_BASICS",
+          targetId: groupId,
+          status: "SUCCESS",
+          metadata: { name },
+        });
+        return { status: "success", message: "Group details updated." } satisfies ActionResult;
+      }
+
+      case "add-products": {
+        const groupId = formString(formData, "groupId");
+        const productIdsInput = formString(formData, "productIdsInput");
+        if (!groupId) {
+          return { status: "error", message: "Missing required field: groupId." } satisfies ActionResult;
+        }
+        if (!productIdsInput) {
+          return { status: "error", message: "Missing required field: productIdsInput." } satisfies ActionResult;
+        }
+        const productIds = productIdsInput
+          .split("\n")
+          .map((id) => id.trim())
+          .filter(Boolean);
+        await addProductsToGroup(admin, groupId, productIds);
+        await recordSubscriptionAdminAction(prisma, {
+          shop,
+          adminEmail: email,
+          action: "ADD_PRODUCTS_TO_GROUP",
+          targetId: groupId,
+          status: "SUCCESS",
+          metadata: { productIds },
+        });
+        return { status: "success", message: `${productIds.length} product(s) added.` } satisfies ActionResult;
+      }
+
+      case "remove-product": {
+        const groupId = formString(formData, "groupId");
+        const productId = formString(formData, "productId");
+        if (!groupId) {
+          return { status: "error", message: "Missing required field: groupId." } satisfies ActionResult;
+        }
+        if (!productId) {
+          return { status: "error", message: "Missing required field: productId." } satisfies ActionResult;
+        }
+        await removeProductsFromGroup(admin, groupId, [productId]);
+        await recordSubscriptionAdminAction(prisma, {
+          shop,
+          adminEmail: email,
+          action: "REMOVE_PRODUCT_FROM_GROUP",
+          targetId: groupId,
+          status: "SUCCESS",
+          metadata: { productId },
+        });
+        return { status: "success", message: "Product removed from group." } satisfies ActionResult;
+      }
+
+      case "update-plan": {
+        const groupId = formString(formData, "groupId");
+        const planId = formString(formData, "planId");
+        const name = formString(formData, "name");
+        const interval = formString(formData, "interval") as "WEEK" | "MONTH";
+        const intervalCountRaw = formString(formData, "intervalCount");
+        if (!groupId || !planId || !name || !interval || !intervalCountRaw) {
+          return {
+            status: "error",
+            message: "Missing required fields: groupId, planId, name, interval, intervalCount.",
+          } satisfies ActionResult;
+        }
+        const intervalCount = parseInt(intervalCountRaw, 10);
+        if (isNaN(intervalCount) || intervalCount < 1) {
+          return { status: "error", message: "intervalCount must be a positive integer." } satisfies ActionResult;
+        }
+        await updateSellingPlanGroupPlans(admin, groupId, {
+          plansToUpdate: [{ id: planId, name, interval, intervalCount }],
         });
         await recordSubscriptionAdminAction(prisma, {
           shop,
           adminEmail: email,
-          action: "SETUP_SELLING_PLANS",
-          targetId: result.sellingPlanGroupId,
+          action: "UPDATE_SELLING_PLAN",
+          targetId: groupId,
           status: "SUCCESS",
-          metadata: result,
+          metadata: { planId, name, interval, intervalCount },
         });
-        return {
-          status: "success",
-          message: result.created
-            ? "Subscription selling plan group was created and attached."
-            : "Subscription selling plan group was updated and attached.",
-        } satisfies ActionResult;
+        return { status: "success", message: "Plan updated." } satisfies ActionResult;
+      }
+
+      case "add-plan": {
+        const groupId = formString(formData, "groupId");
+        const name = formString(formData, "name");
+        const interval = formString(formData, "interval") as "WEEK" | "MONTH";
+        const intervalCountRaw = formString(formData, "intervalCount");
+        if (!groupId || !name || !interval || !intervalCountRaw) {
+          return {
+            status: "error",
+            message: "Missing required fields: groupId, name, interval, intervalCount.",
+          } satisfies ActionResult;
+        }
+        const intervalCount = parseInt(intervalCountRaw, 10);
+        if (isNaN(intervalCount) || intervalCount < 1) {
+          return { status: "error", message: "intervalCount must be a positive integer." } satisfies ActionResult;
+        }
+        await updateSellingPlanGroupPlans(admin, groupId, {
+          plansToCreate: [{ name, interval, intervalCount }],
+        });
+        await recordSubscriptionAdminAction(prisma, {
+          shop,
+          adminEmail: email,
+          action: "ADD_SELLING_PLAN",
+          targetId: groupId,
+          status: "SUCCESS",
+          metadata: { name, interval, intervalCount },
+        });
+        return { status: "success", message: "Plan added." } satisfies ActionResult;
+      }
+
+      case "remove-plan": {
+        const groupId = formString(formData, "groupId");
+        const planId = formString(formData, "planId");
+        if (!groupId) {
+          return { status: "error", message: "Missing required field: groupId." } satisfies ActionResult;
+        }
+        if (!planId) {
+          return { status: "error", message: "Missing required field: planId." } satisfies ActionResult;
+        }
+        await updateSellingPlanGroupPlans(admin, groupId, {
+          plansToDelete: [planId],
+        });
+        await recordSubscriptionAdminAction(prisma, {
+          shop,
+          adminEmail: email,
+          action: "REMOVE_SELLING_PLAN",
+          targetId: groupId,
+          status: "SUCCESS",
+          metadata: { planId },
+        });
+        return { status: "success", message: "Plan removed." } satisfies ActionResult;
       }
 
       case "restore-snapshot": {
@@ -157,7 +322,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await recordSubscriptionAdminAction(prisma, {
       shop,
       adminEmail: email,
-      action: intent === "restore-snapshot" ? "snapshot.restored" : "SETUP_SELLING_PLANS",
+      action: intent,
       status: "ERROR",
       message,
     });
@@ -166,140 +331,127 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 };
 
-type PickedItem = { id: string; title: string };
-
-function SellingPlanSetup({
+function GroupEditor({
   group,
-  error,
 }: {
-  group: Awaited<ReturnType<typeof getSubscriptionSellingPlanGroup>>;
-  error: string | null;
+  group: SellingPlanGroupDetail;
 }) {
-  const shopify = useAppBridge();
-  const [products, setProducts] = useState<PickedItem[]>([]);
-  const [variants, setVariants] = useState<PickedItem[]>([]);
+  return (
+    <div className={styles.stack}>
+      <GroupBasicsForm
+        groupId={group.id}
+        name={group.name}
+        description={group.description}
+        merchantCode={group.merchantCode}
+      />
+      <PlansTable groupId={group.id} plans={group.sellingPlans.nodes} />
+      <ProductCardList groupId={group.id} products={group.products.nodes} />
+    </div>
+  );
+}
 
-  async function openProductPicker() {
-    const selection = await shopify.resourcePicker({
-      type: "product",
-      multiple: true,
-      action: "select",
-      selectionIds: products.map((p) => ({ id: p.id })),
-    });
-    if (selection) {
-      setProducts(
-        selection.map((p) => ({ id: p.id, title: p.title })),
-      );
+function GroupPicker({
+  groups,
+  selectedGroupId,
+}: {
+  groups: SellingPlanGroupSummary[];
+  selectedGroupId: string | undefined;
+}) {
+  const navigate = useNavigate();
+  const [showCreate, setShowCreate] = useState(false);
+
+  function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value;
+    const params = new URLSearchParams(window.location.search);
+    if (value) {
+      params.set("groupId", value);
+    } else {
+      params.delete("groupId");
     }
-  }
-
-  async function openVariantPicker() {
-    const selection = await shopify.resourcePicker({
-      type: "variant",
-      multiple: true,
-      action: "select",
-      selectionIds: variants.map((v) => ({ id: v.id })),
-    });
-    if (selection) {
-      setVariants(
-        selection.map((v) => ({
-          id: v.id,
-          title: v.displayName ?? v.id,
-        })),
-      );
-    }
-  }
-
-  function removeProduct(id: string) {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-  }
-
-  function removeVariant(id: string) {
-    setVariants((prev) => prev.filter((v) => v.id !== id));
+    navigate(`?${params.toString()}`);
   }
 
   return (
-    <s-section heading="Subscription purchase options">
-      {error ? <div className={styles.errorBox}>{error}</div> : null}
-      <div className={styles.setupStatus}>
-        <span className={group ? styles.badgeSuccess : styles.badgeWarning}>
-          {group ? "Configured" : "Not configured"}
-        </span>
-        {group ? <span>{group.id}</span> : null}
+    <div className={styles.groupPickerRow}>
+      <div className={styles.pickerField}>
+        <span className={styles.pickerLabel}>Selling plan group</span>
+        <select
+          value={selectedGroupId ?? ""}
+          onChange={handleSelectChange}
+          style={{ minHeight: 36, borderRadius: 6, border: "1px solid #c9cccf", padding: "6px 10px", font: "inherit", fontSize: "0.95rem" }}
+        >
+          <option value="">— Select a group —</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name} — {g.merchantCode} ({g.productCount} products)
+            </option>
+          ))}
+        </select>
       </div>
-      <Form method="post" className={styles.stack}>
-        <input type="hidden" name="intent" value="setup-selling-plans" />
-        <input
-          type="hidden"
-          name="productIdsInput"
-          value={products.map((p) => p.id).join("\n")}
-        />
-        <input
-          type="hidden"
-          name="productVariantIdsInput"
-          value={variants.map((v) => v.id).join("\n")}
-        />
 
-        <div className={styles.pickerField}>
-          <span className={styles.pickerLabel}>Products</span>
+      <div>
+        {!showCreate ? (
           <button
             type="button"
             className={styles.pickerButton}
-            onClick={openProductPicker}
+            onClick={() => setShowCreate(true)}
           >
-            Select products
+            + Create new group
           </button>
-          {products.length > 0 && (
-            <div className={styles.chipList}>
-              {products.map((p) => (
-                <span key={p.id} className={styles.chip}>
-                  {p.title}
-                  <button
-                    type="button"
-                    className={styles.chipRemove}
-                    aria-label={`Remove ${p.title}`}
-                    onClick={() => removeProduct(p.id)}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
+        ) : (
+          <Form method="post" className={styles.modalForm} style={{ border: "1px solid #dfe3e8", borderRadius: 8, marginTop: 8 }}>
+            <h3>New selling plan group</h3>
+            <input type="hidden" name="intent" value="create-group" />
+            <div className={styles.field}>
+              <span>Name *</span>
+              <input type="text" name="name" required placeholder="e.g. Monthly subscriptions" />
             </div>
-          )}
-        </div>
-
-        <div className={styles.pickerField}>
-          <span className={styles.pickerLabel}>Product variants</span>
-          <button
-            type="button"
-            className={styles.pickerButton}
-            onClick={openVariantPicker}
-          >
-            Select variants
-          </button>
-          {variants.length > 0 && (
-            <div className={styles.chipList}>
-              {variants.map((v) => (
-                <span key={v.id} className={styles.chip}>
-                  {v.title}
-                  <button
-                    type="button"
-                    className={styles.chipRemove}
-                    aria-label={`Remove ${v.title}`}
-                    onClick={() => removeVariant(v.id)}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
+            <div className={styles.field}>
+              <span>Description (optional)</span>
+              <textarea name="description" placeholder="Brief description shown to customers" />
             </div>
-          )}
-        </div>
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={styles.pickerButton}
+                onClick={() => setShowCreate(false)}
+              >
+                Cancel
+              </button>
+              <button type="submit" className={styles.button}>
+                Create group
+              </button>
+            </div>
+          </Form>
+        )}
+      </div>
+    </div>
+  );
+}
 
-        <button type="submit" className={styles.button}>
-          Upsert monthly and bi-weekly plans
-        </button>
-      </Form>
+function SellingPlanSetup({
+  groups,
+  selectedGroup,
+  error,
+}: {
+  groups: SellingPlanGroupSummary[];
+  selectedGroup: SellingPlanGroupDetail | null;
+  error: string | null;
+}) {
+  const shopify = useAppBridge();
+
+  return (
+    <s-section heading="Subscription purchase options">
+      <GroupPicker groups={groups} selectedGroupId={selectedGroup?.id} />
+      {error ? <div className={styles.errorBox}>{error}</div> : null}
+      {selectedGroup ? (
+        <GroupEditor group={selectedGroup} />
+      ) : (
+        <div className={styles.setupStatus}>
+          <span className={styles.badgeWarning}>Not configured</span>
+          <span>Select or create a selling plan group above to get started.</span>
+        </div>
+      )}
     </s-section>
   );
 }
@@ -440,7 +592,8 @@ function SnapshotReconcile({
 export default function SubscriptionConfigPage() {
   const {
     sellingPlanError,
-    sellingPlanGroup,
+    groups,
+    selectedGroup,
     requiredScopes,
     recentRenewalRuns,
     workerEnabled,
@@ -472,7 +625,7 @@ export default function SubscriptionConfigPage() {
         </s-section>
       ) : null}
 
-      <SellingPlanSetup group={sellingPlanGroup} error={sellingPlanError} />
+      <SellingPlanSetup groups={groups} selectedGroup={selectedGroup} error={sellingPlanError} />
       <RenewalRuns runs={recentRenewalRuns} workerEnabled={workerEnabled} />
       <SnapshotReconcile snapshots={pendingSnapshots} snapshotsEnabled={snapshotsEnabled} />
 
