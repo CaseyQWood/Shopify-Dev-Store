@@ -1,0 +1,568 @@
+.searchForm {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.searchField {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 28rem;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.searchField input,
+.field input,
+.field textarea {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #c9cccf;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.field textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.field span {
+  font-size: 0.82rem;
+  color: #4f5661;
+}
+
+.button,
+.dangerButton {
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.button {
+  background: #1f6f4a;
+  color: #ffffff;
+}
+
+.dangerButton {
+  background: #fff1f1;
+  color: #a01818;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid #dfe3e8;
+  border-radius: 6px;
+}
+
+.table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid #eef0f2;
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  color: #5c5f62;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.selectedRow {
+  background: #f2f7f4;
+}
+
+.idLink {
+  color: #145c3e;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.customerCell {
+  display: grid;
+  gap: 2px;
+}
+
+.customerCell small,
+.muted {
+  color: #6d7175;
+}
+
+.badge,
+.badgeSuccess,
+.badgeWarning,
+.badgeCritical {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge {
+  background: #f1f2f3;
+  color: #3f4347;
+}
+
+.badgeSuccess {
+  background: #e4f5ea;
+  color: #17613a;
+}
+
+.badgeWarning {
+  background: #fff5d6;
+  color: #755900;
+}
+
+.badgeCritical {
+  background: #fde8e8;
+  color: #a01818;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.summaryGrid > div,
+.actionPanel,
+.linePanel {
+  border: 1px solid #dfe3e8;
+  border-radius: 6px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.summaryGrid > div {
+  display: grid;
+  gap: 4px;
+}
+
+.label {
+  color: #6d7175;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.actionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.actionPanel {
+  display: grid;
+  gap: 10px;
+}
+
+.actionPanel h3,
+.linePanel h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.actionPanel p,
+.linePanel p {
+  margin: 0;
+  color: #6d7175;
+}
+
+.stack {
+  display: grid;
+  gap: 14px;
+}
+
+.inlineGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+
+.lineHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.emptyState,
+.errorBox,
+.successBox {
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.emptyState {
+  border: 1px dashed #c9cccf;
+  color: #6d7175;
+}
+
+.errorBox {
+  border: 1px solid #f1b8b8;
+  background: #fff7f7;
+  color: #a01818;
+  margin: 12px 0;
+}
+
+.successBox {
+  border: 1px solid #a9d7b8;
+  background: #f2fbf5;
+  color: #17613a;
+  margin: 12px 0;
+}
+
+.modal {
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  padding: 0;
+  width: min(420px, 92vw);
+  background: #ffffff;
+}
+
+.modal::backdrop {
+  background: rgba(33, 43, 54, 0.4);
+}
+
+.modalForm {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 1rem;
+}
+
+.modalForm h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.modalForm .field span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #4f5661;
+}
+
+.modalForm input,
+.modalForm textarea {
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.setupStatus {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+/* Resource picker field */
+.pickerField {
+  display: grid;
+  gap: 6px;
+}
+
+.pickerLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #4f5661;
+}
+
+.pickerButton {
+  justify-self: start;
+  min-height: 36px;
+  border: 1px solid #c9cccf;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: #f6f6f7;
+  color: #202223;
+  cursor: pointer;
+}
+
+.pickerButton:hover {
+  background: #ebebeb;
+  border-color: #adb0b3;
+}
+
+/* Selected items chip list */
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e4f5ea;
+  color: #17613a;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid #a9d7b8;
+}
+
+.chipRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #17613a;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.chipRemove:hover {
+  background: #a9d7b8;
+}
+
+.scopeList {
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* Group picker affordance */
+.groupPickerRow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Plans section container */
+.plansTable {
+  display: grid;
+  gap: 12px;
+  max-width: 720px;
+}
+
+/* Plans grid table: 4 explicit columns aligned to thead */
+.plansGrid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.plansGrid th,
+.plansGrid td {
+  border-bottom: 1px solid #eef0f2;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.plansGrid th {
+  color: #5c5f62;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.plansGrid tr:last-child td {
+  border-bottom: 0;
+}
+
+.plansGrid colgroup col:nth-child(1) {
+  width: auto;
+}
+
+/* Column widths via th, since table-layout: fixed reads header widths */
+.plansGrid thead th:nth-child(1) {
+  width: auto;
+}
+.plansGrid thead th:nth-child(2) {
+  width: 110px;
+}
+.plansGrid thead th:nth-child(3) {
+  width: 80px;
+}
+.plansGrid thead th:nth-child(4) {
+  width: 160px;
+}
+
+.cellInput {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid #c9cccf;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.cellSelect {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid #c9cccf;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.cellNumber {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid #c9cccf;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.planActions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* Responsive grid of product cards: ~3-4 across on a wide editor */
+.productGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+/* Product card: image left, title+price middle, remove button right */
+.productCard {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  padding-right: 40px;
+  border: 1px solid #dfe3e8;
+  border-radius: 6px;
+  background: #ffffff;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.productCardBody {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.productCardTitle {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.productCardPrice {
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.productCardRemoveForm {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin: 0;
+}
+
+/* Compact icon-only remove button for product cards */
+.iconRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: #6d7175;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.iconRemove:hover {
+  background: #fde8e8;
+  border-color: #f1b8b8;
+  color: #a01818;
+}
+
+.iconRemove:focus-visible {
+  outline: 2px solid #1f6f4a;
+  outline-offset: 1px;
+}
+
+@media (max-width: 720px) {
+  .searchForm {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .button,
+  .dangerButton {
+    width: 100%;
+  }
+
+  .groupPickerRow {
+    flex-direction: column;
+  }
+}

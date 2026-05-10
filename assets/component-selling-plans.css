@@ -1,0 +1,58 @@
+.selling-plan-selector {
+  border: 1px solid rgba(var(--color-foreground), 0.14);
+  border-radius: 0.6rem;
+  margin: 0 0 1.6rem;
+  padding: 1.2rem;
+}
+
+.selling-plan-selector__legend {
+  font-size: 1.3rem;
+  font-weight: 600;
+  padding: 0 0.4rem;
+}
+
+.selling-plan-selector__group {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.selling-plan-selector__group-name {
+  color: rgba(var(--color-foreground), 0.72);
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.selling-plan-selector__option {
+  align-items: flex-start;
+  border: 1px solid rgba(var(--color-foreground), 0.14);
+  border-radius: 0.6rem;
+  cursor: pointer;
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.selling-plan-selector__option:has(input:checked) {
+  border-color: rgb(var(--color-foreground));
+}
+
+.selling-plan-selector__option input {
+  flex: 0 0 auto;
+  margin-top: 0.2rem;
+}
+
+.selling-plan-selector__option span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.selling-plan-selector__option strong {
+  font-size: 1.4rem;
+}
+
+.selling-plan-selector__option small {
+  color: rgba(var(--color-foreground), 0.72);
+  font-size: 1.2rem;
+}

@@ -24,6 +24,10 @@
       endif
     -%}
 
+    {%- if product.selling_plan_groups.size > 0 -%}
+      {{ 'component-selling-plans.css' | asset_url | stylesheet_tag }}
+    {%- endif -%}
+
     <product-form
       class="product-form"
       data-hide-errors="{{ gift_card_recipient_feature_active }}"
@@ -59,6 +63,8 @@
         {%- if gift_card_recipient_feature_active -%}
           {%- render 'gift-card-recipient-form', product: product, form: form, section: section -%}
         {%- endif -%}
+
+        {%- render 'selling-plan-selector', product: product, product_form_id: product_form_id -%}
 
         <div class="product-form__buttons">
           {%- liquid

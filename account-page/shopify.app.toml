@@ -14,7 +14,7 @@ prefix = "apps"
 subpath = "account-page-proxy"
 
 [webhooks]
-api_version = "2026-07"
+api_version = "2026-04"
 
   [[webhooks.subscriptions]]
   topics = [ "app/uninstalled" ]
@@ -24,9 +24,13 @@ api_version = "2026-07"
   topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
 
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "/webhooks/compliance"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_app_proxy,read_orders"
+scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_app_proxy,read_orders,read_customers,read_customer_payment_methods,read_own_subscription_contracts,write_own_subscription_contracts"
 
 [auth]
 redirect_urls = [
