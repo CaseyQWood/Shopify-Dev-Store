@@ -520,51 +520,54 @@ async function pollRunningRuns(session) {
   }
 }
 
-async function hasRecentRunningRun(shop) {
-  const cutoff = new Date(Date.now() - RUNNING_LOCK_MS);
-  const runningRun = await prisma.subscriptionRenewalRun.findFirst({
-    where: {
-      shop,
-      status: "RUNNING",
-      createdAt: { gte: cutoff },
-    },
-  });
-
-  return Boolean(runningRun);
-}
-
-async function createRenewalRun(shop, windowStart, windowEnd) {
+// Atomically claim the renewal window using a Postgres advisory lock keyed
+// by (shop, windowStart). Only one worker across the cluster can pass this
+// gate per (shop, window) at a time. Inside the lock we check for an existing
+// non-terminal run for the same key and either return it (if PENDING and ours
+// to finish) or null (someone else owns it). The lock is held only for the
+// claim — Shopify mutations happen outside the transaction.
+async function tryClaimRenewalWindow(shop, windowStart, windowEnd) {
   const idempotencyKey = `${shop}:${windowStart.toISOString()}:${windowEnd.toISOString()}`;
+  const lockKeyA = shop;
+  const lockKeyB = windowStart.toISOString();
+  const cutoff = new Date(Date.now() - RUNNING_LOCK_MS);
 
-  try {
-    return await prisma.subscriptionRenewalRun.create({
-      data: {
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw`
+      SELECT pg_try_advisory_xact_lock(hashtext(${lockKeyA}), hashtext(${lockKeyB})) AS locked
+    `;
+    if (!rows?.[0]?.locked) return null;
+
+    const recent = await tx.subscriptionRenewalRun.findFirst({
+      where: {
         shop,
-        idempotencyKey,
-        windowStart,
-        windowEnd,
-        status: "PENDING",
+        status: { in: ["PENDING", "RUNNING"] },
+        createdAt: { gte: cutoff },
       },
     });
-  } catch (error) {
-    if (!isUniqueConstraintError(error)) throw error;
+    if (recent) return null;
 
-    return prisma.subscriptionRenewalRun.findUnique({
-      where: { idempotencyKey },
-    });
-  }
+    try {
+      return await tx.subscriptionRenewalRun.create({
+        data: {
+          shop,
+          idempotencyKey,
+          windowStart,
+          windowEnd,
+          status: "PENDING",
+        },
+      });
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+      return null;
+    }
+  });
 }
 
 async function chargeRenewalWindow(session) {
-  if (await hasRecentRunningRun(session.shop)) {
-    return;
-  }
-
   const { windowStart, windowEnd } = renewalWindow();
-  const run = await createRenewalRun(session.shop, windowStart, windowEnd);
-  if (!run || run.status !== "PENDING") {
-    return;
-  }
+  const run = await tryClaimRenewalWindow(session.shop, windowStart, windowEnd);
+  if (!run) return;
 
   try {
     const data = await adminGraphql(
