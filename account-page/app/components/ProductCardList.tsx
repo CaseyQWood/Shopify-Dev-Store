@@ -1,4 +1,4 @@
-import { Form } from "react-router";
+import { Form, useNavigation, useSubmit } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import type { SellingPlanGroupDetail } from "../subscriptions/selling-plans.server";
 import styles from "../styles/subscription-admin.module.css";
@@ -58,17 +58,6 @@ function ProductCard({ product, groupId }: { product: Product; groupId: string }
   );
 }
 
-function submitAddProductsForm(groupId: string, productIds: string[]) {
-  const form = document.createElement("form");
-  form.method = "post";
-  form.style.display = "none";
-  form.appendChild(Object.assign(document.createElement("input"), { name: "intent", value: "add-products" }));
-  form.appendChild(Object.assign(document.createElement("input"), { name: "groupId", value: groupId }));
-  form.appendChild(Object.assign(document.createElement("input"), { name: "productIdsInput", value: productIds.join("\n") }));
-  document.body.appendChild(form);
-  form.submit();
-}
-
 function AddProductsButton({
   groupId,
   products,
@@ -77,6 +66,9 @@ function AddProductsButton({
   products: SellingPlanGroupDetail["products"]["nodes"];
 }) {
   const shopify = useAppBridge();
+  const submit = useSubmit();
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state !== "idle";
 
   async function openAddProductsPicker() {
     const selection = await shopify.resourcePicker({
@@ -85,9 +77,13 @@ function AddProductsButton({
       action: "select",
       selectionIds: products.map((p) => ({ id: p.id })),
     });
-    if (selection?.length) {
-      submitAddProductsForm(groupId, selection.map((p) => p.id));
-    }
+    if (!selection?.length) return;
+
+    const formData = new FormData();
+    formData.set("intent", "add-products");
+    formData.set("groupId", groupId);
+    formData.set("productIdsInput", selection.map((p) => p.id).join("\n"));
+    submit(formData, { method: "post" });
   }
 
   return (
@@ -96,6 +92,7 @@ function AddProductsButton({
       className={styles.pickerButton}
       style={{ marginTop: 12 }}
       onClick={openAddProductsPicker}
+      disabled={isSubmitting}
     >
       + Add products
     </button>
