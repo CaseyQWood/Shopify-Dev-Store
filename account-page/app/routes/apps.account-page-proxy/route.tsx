@@ -8,13 +8,22 @@ import {
 } from "react-router";
 
 import { authenticateAppProxyRequest } from "../../app-proxy.server";
-import { getMockUser } from "./mock";
+import { fetchCustomerProfile } from "./customer.server";
 import styles from "./styles.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { customerId, pathPrefix, shop } =
+  const { customerId, pathPrefix, shop, admin } =
     await authenticateAppProxyRequest(request);
-  const user = customerId ? getMockUser() : null;
+
+  let user = null;
+  if (customerId && admin) {
+    try {
+      const result = await fetchCustomerProfile(admin, customerId);
+      user = result.user;
+    } catch (err) {
+      console.error("[account-proxy] failed to load customer profile", err);
+    }
+  }
 
   return {
     shop,
@@ -71,26 +80,34 @@ export default function AccountPageLayout() {
               <p className={styles.summaryName}>
                 {user.firstName} {user.lastName}
               </p>
-              <p className={styles.summaryField}>{user.email}</p>
-              <p className={styles.summaryField}>{user.phone}</p>
-              <hr className={styles.summaryDivider} />
-              <p className={styles.summaryAddressLabel}>Default address</p>
-              <address className={styles.summaryAddress}>
-                {user.defaultAddress.name}
-                <br />
-                {user.defaultAddress.line1}
-                {user.defaultAddress.line2 ? (
-                  <>
+              {user.email ? (
+                <p className={styles.summaryField}>{user.email}</p>
+              ) : null}
+              {user.phone ? (
+                <p className={styles.summaryField}>{user.phone}</p>
+              ) : null}
+              {user.defaultAddress ? (
+                <>
+                  <hr className={styles.summaryDivider} />
+                  <p className={styles.summaryAddressLabel}>Default address</p>
+                  <address className={styles.summaryAddress}>
+                    {user.defaultAddress.name}
                     <br />
-                    {user.defaultAddress.line2}
-                  </>
-                ) : null}
-                <br />
-                {user.defaultAddress.city}, {user.defaultAddress.region}{" "}
-                {user.defaultAddress.postalCode}
-                <br />
-                {user.defaultAddress.country}
-              </address>
+                    {user.defaultAddress.line1}
+                    {user.defaultAddress.line2 ? (
+                      <>
+                        <br />
+                        {user.defaultAddress.line2}
+                      </>
+                    ) : null}
+                    <br />
+                    {user.defaultAddress.city}, {user.defaultAddress.region}{" "}
+                    {user.defaultAddress.postalCode}
+                    <br />
+                    {user.defaultAddress.country}
+                  </address>
+                </>
+              ) : null}
             </div>
           </aside>
         </div>

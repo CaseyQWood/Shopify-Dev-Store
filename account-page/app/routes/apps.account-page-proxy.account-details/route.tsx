@@ -2,17 +2,24 @@ import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { authenticateLoggedInCustomerAppProxyRequest } from "../../app-proxy.server";
-import { getMockAddresses, getMockUser } from "../apps.account-page-proxy/mock";
+import { fetchCustomerProfile } from "../apps.account-page-proxy/customer.server";
 import { TabError } from "../apps.account-page-proxy/tab-error";
 import styles from "./styles.module.css";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticateLoggedInCustomerAppProxyRequest(request);
+  const { customerId, admin } =
+    await authenticateLoggedInCustomerAppProxyRequest(request);
 
-  return {
-    user: getMockUser(),
-    addresses: getMockAddresses(),
-  };
+  if (!admin) {
+    throw new Response("admin-unavailable", { status: 503 });
+  }
+
+  const { user, addresses } = await fetchCustomerProfile(admin, customerId);
+  if (!user) {
+    throw new Response("not-found", { status: 404 });
+  }
+
+  return { user, addresses };
 };
 
 export function ErrorBoundary() {
