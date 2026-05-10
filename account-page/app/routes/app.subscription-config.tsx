@@ -344,8 +344,8 @@ function GroupEditor({
         description={group.description}
         merchantCode={group.merchantCode}
       />
-      <PlansTable groupId={group.id} plans={group.sellingPlans.nodes} />
       <ProductCardList groupId={group.id} products={group.products.nodes} />
+      <PlansTable groupId={group.id} plans={group.sellingPlans.nodes} />
     </div>
   );
 }
@@ -383,7 +383,7 @@ function GroupPicker({
           <option value="">— Select a group —</option>
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
-              {g.name} — {g.merchantCode} ({g.productCount} products)
+              {g.name} — {g.merchantCode}
             </option>
           ))}
         </select>
@@ -629,7 +629,7 @@ export default function SubscriptionConfigPage() {
       <RenewalRuns runs={recentRenewalRuns} workerEnabled={workerEnabled} />
       <SnapshotReconcile snapshots={pendingSnapshots} snapshotsEnabled={snapshotsEnabled} />
 
-      <s-section slot="aside" heading="Access requirements">
+      {/* <s-section slot="aside" heading="Access requirements">
         <div className={styles.stack}>
           <p className={styles.muted}>
             Shopify remains the subscription source of truth. Checkout creates
@@ -642,7 +642,7 @@ export default function SubscriptionConfigPage() {
             ))}
           </ul>
         </div>
-      </s-section>
+      </s-section> */}
     </s-page>
   );
 }

@@ -35,22 +35,23 @@ function ProductCard({ product, groupId }: { product: Product; groupId: string }
   return (
     <div className={styles.productCard}>
       <ProductImage product={product} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 500 }}>{product.title}</div>
-        <div className={styles.muted} style={{ fontSize: "0.85rem" }}>
+      <div className={styles.productCardBody}>
+        <div className={styles.productCardTitle}>{product.title}</div>
+        <div className={`${styles.muted} ${styles.productCardPrice}`}>
           {formatPriceRange(product.priceRangeV2)}
         </div>
       </div>
-      <Form method="post">
+      <Form method="post" className={styles.productCardRemoveForm}>
         <input type="hidden" name="intent" value="remove-product" />
         <input type="hidden" name="groupId" value={groupId} />
         <input type="hidden" name="productId" value={product.id} />
         <button
           type="submit"
-          className={styles.chipRemove}
+          className={styles.iconRemove}
           aria-label={`Remove ${product.title}`}
+          title={`Remove ${product.title}`}
         >
-          Remove
+          ×
         </button>
       </Form>
     </div>
@@ -114,7 +115,7 @@ export function ProductCardList({
       {products.length === 0 ? (
         <div className={styles.emptyState}>No products attached.</div>
       ) : (
-        <div>
+        <div className={styles.productGrid}>
           {products.map((product) => (
             <ProductCard key={product.id} product={product} groupId={groupId} />
           ))}

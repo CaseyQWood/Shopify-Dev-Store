@@ -28,7 +28,6 @@ export type SellingPlanGroupSummary = {
   description?: string | null;
   appId?: string | null;
   summary?: string | null;
-  productCount: number;
   sellingPlans: {
     nodes: Array<{ id: string; name: string }>;
   };
@@ -41,7 +40,6 @@ export type SellingPlanGroupDetail = {
   description?: string | null;
   appId?: string | null;
   summary?: string | null;
-  productCount: number;
   products: {
     nodes: Array<{
       id: string;
@@ -120,7 +118,6 @@ const SELLING_PLAN_GROUPS_LIST_QUERY = `#graphql
         description
         appId
         summary
-        productCount
         sellingPlans(first: 5) {
           nodes {
             id
@@ -141,7 +138,6 @@ const SELLING_PLAN_GROUP_DETAIL_QUERY = `#graphql
       description
       appId
       summary
-      productCount
       products(first: 100) {
         nodes {
           id
