@@ -380,7 +380,15 @@ function SearchResults({
   );
 }
 
-function ContractSummary({ contract, actionData }: { contract: SubscriptionContract, actionData: { status: "success" | "error"; message: string } | undefined; }) {
+function ContractSummary({
+  contract,
+  actionData,
+  isSubmitting,
+}: {
+  contract: SubscriptionContract;
+  actionData: { status: "success" | "error"; message: string } | undefined;
+  isSubmitting: boolean;
+}) {
   return (
     <div className={styles.summaryGrid}>
       <div>
@@ -416,13 +424,20 @@ function ContractSummary({ contract, actionData }: { contract: SubscriptionContr
       <EditProductsModal
         contract={contract}
         actionData={actionData ?? undefined}
+        isSubmitting={isSubmitting}
       />
 
     </div>
   );
 }
 
-function ScheduleActions({ contract }: { contract: SubscriptionContract }) {
+function ScheduleActions({
+  contract,
+  isSubmitting,
+}: {
+  contract: SubscriptionContract;
+  isSubmitting: boolean;
+}) {
   return (
     <div className={styles.actionGrid}>
       <Form method="post" className={styles.actionPanel}>
@@ -432,7 +447,7 @@ function ScheduleActions({ contract }: { contract: SubscriptionContract }) {
         <p>
           Applies a merchant-initiated skip to the next unbilled billing cycle.
         </p>
-        <button type="submit" className={styles.button}>
+        <button type="submit" className={styles.button} disabled={isSubmitting}>
           Skip next cycle
         </button>
       </Form>
@@ -457,7 +472,7 @@ function ScheduleActions({ contract }: { contract: SubscriptionContract }) {
             required
           />
         </label>
-        <button type="submit" className={styles.button}>
+        <button type="submit" className={styles.button} disabled={isSubmitting}>
           Shift schedule
         </button>
       </Form>
@@ -472,9 +487,11 @@ const EDIT_PRODUCTS_MODAL_ID = "edit-products-modal";
 function EditProductsModal({
   contract,
   actionData,
+  isSubmitting,
 }: {
   contract: SubscriptionContract;
   actionData: { status: "success" | "error"; message: string } | undefined;
+  isSubmitting: boolean;
 }) {
   const shopify = useAppBridge();
   const [open, setOpen] = useState(false);
@@ -613,7 +630,11 @@ function EditProductsModal({
                         inputMode="decimal"
                       />
                     </label>
-                    <button type="submit" className={styles.button}>
+                    <button
+                      type="submit"
+                      className={styles.button}
+                      disabled={isSubmitting}
+                    >
                       Save
                     </button>
                   </Form>
@@ -630,7 +651,11 @@ function EditProductsModal({
                       value={contract.id}
                     />
                     <input type="hidden" name="lineId" value={line.id} />
-                    <button type="submit" className={styles.dangerButton}>
+                    <button
+                      type="submit"
+                      className={styles.dangerButton}
+                      disabled={isSubmitting}
+                    >
                       Remove recurring line
                     </button>
                   </Form>
@@ -700,7 +725,7 @@ function EditProductsModal({
               <button
                 type="submit"
                 className={styles.button}
-                disabled={!recurringVariant}
+                disabled={!recurringVariant || isSubmitting}
               >
                 Add recurring
               </button>
@@ -768,7 +793,7 @@ function EditProductsModal({
               <button
                 type="submit"
                 className={styles.button}
-                disabled={!oneTimeVariant}
+                disabled={!oneTimeVariant || isSubmitting}
               >
                 Add to next cycle
               </button>
@@ -796,7 +821,13 @@ function toLocalInputValue(iso: string | null) {
 
 const CYCLE_MODAL_ID = "cycle-date-modal";
 
-function BillingCycles({ contract }: { contract: SubscriptionContract }) {
+function BillingCycles({
+  contract,
+  isSubmitting,
+}: {
+  contract: SubscriptionContract;
+  isSubmitting: boolean;
+}) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
 
@@ -902,7 +933,11 @@ function BillingCycles({ contract }: { contract: SubscriptionContract }) {
           }
         >
           <button onClick={() => setOpenIndex(null)}>Cancel</button>
-          <button variant="primary" onClick={handleSave}>
+          <button
+            variant="primary"
+            onClick={handleSave}
+            disabled={isSubmitting}
+          >
             Save date
           </button>
         </TitleBar>
@@ -975,13 +1010,19 @@ export default function SubscriptionAdminConsole() {
       <s-section heading="Contract detail">
         {selectedContract ? (
           <div className={styles.stack}>
-            <ContractSummary contract={selectedContract} actionData={actionData ?? undefined} />
-            <ScheduleActions contract={selectedContract} />
-            {/* <EditProductsModal
+            <ContractSummary
               contract={selectedContract}
               actionData={actionData ?? undefined}
-            /> */}
-            <BillingCycles contract={selectedContract} />
+              isSubmitting={isSubmitting}
+            />
+            <ScheduleActions
+              contract={selectedContract}
+              isSubmitting={isSubmitting}
+            />
+            <BillingCycles
+              contract={selectedContract}
+              isSubmitting={isSubmitting}
+            />
           </div>
         ) : (
           <div className={styles.emptyState}>
@@ -989,15 +1030,6 @@ export default function SubscriptionAdminConsole() {
           </div>
         )}
       </s-section>
-
-
-      {
-      // TODO: remove this box and implement a true submitting managment system( probably just control buttons being disabled)
-      /* {isSubmitting ? (
-        <s-section slot="aside" heading="Status">
-          <div className={styles.muted}>Submitting Shopify admin action...</div>
-        </s-section>
-      ) : null} */}
     </s-page>
   );
 }
